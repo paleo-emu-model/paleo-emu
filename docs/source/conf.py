@@ -39,8 +39,6 @@ sphinx_gallery_conf = {
     'remove_config_comments': True,  # Remove metadata comments
     'image_scrapers': ('matplotlib',),  # Important for plot capture
     'reference_url': {'sklearn': None},  # Cleaner cross-references
-
-
     'show_signature': False,  # Don't show function signatures
     'line_numbers': False,  # Don't show line numbers
 }
