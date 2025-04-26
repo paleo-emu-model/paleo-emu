@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../../Emulator_Xin"
+		},
+		{
+			"name": "paleo-emu",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}
