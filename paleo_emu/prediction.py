@@ -1,5 +1,5 @@
 
-from src.load import load_forcing_data
+from paleo_emu.load import load_forcing_data
 
 
 def run_prediction(pipeline, pca_model, forcing_cfg, spatial_shape):

@@ -5,8 +5,8 @@ import tensorflow as tf
 
 from sklearn.decomposition import PCA
 
-from src.vae import VAE, compute_vae_loss
-from src.export import save_training_log
+from paleo_emu.vae import VAE, compute_vae_loss
+from paleo_emu.export import save_training_log
 
 
 # old code, keep it for now

@@ -1,6 +1,6 @@
 
-from src.export import save_prediction
-from src.training import run_training
+from paleo_emu.export import save_prediction
+from paleo_emu.training import run_training
 
 
 def full_emulator_experiment(train_dict, emulator_name, output_dir="outputs",seed=None, vae_config=None):

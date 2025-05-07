@@ -10,11 +10,11 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 
 
-from src.load import load_training_data
-from src.encoder import extract_features
-from src.regressor import build_regressor
-from src.plotting import plot_r2_map_with_latlon, plot_prediction_maps_with_info
-from src.validation import compute_r2_map
+from paleo_emu.load import load_training_data
+from paleo_emu.encoder import extract_features
+from paleo_emu.regressor import build_regressor
+from paleo_emu.plotting import plot_r2_map_with_latlon, plot_prediction_maps_with_info
+from paleo_emu.validation import compute_r2_map
 
 # separate train and test before PCA
 def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, seed=42, return_pred=True):
