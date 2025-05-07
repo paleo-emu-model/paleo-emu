@@ -686,41 +686,6 @@ def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array,
     plt.close()
     print(f"[INFO] Map saved to {save_path}")
 
-# ===== 主程序X2：多种子训练 =====
-def save_seed_vs_score_plot(df, emulator_name, output_dir,
-                            seed=None, latent_dim=None, epochs=None, learning_rate=None, batch_size=None, kl_weight=None):
-    """
-    保存 Seeds vs R² 分数曲线图。
-    文件名包含所有超参数信息。
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    # === 统一格式化info_str ===
-    if seed is not None and latent_dim is not None:
-        info_str = f"seed{seed}_latent{latent_dim}_ep{epochs}_lr{learning_rate}_bs{batch_size}_kl{kl_weight}"
-    else:
-        info_str = None
-
-    if info_str:
-        filename = f"{emulator_name}_seed_vs_score_{info_str}.png"
-    else:
-        filename = f"{emulator_name}_seed_vs_score.png"
-
-    save_path = os.path.join(output_dir, filename)
-
-    # === 绘制图 ===
-    plt.figure(figsize=(8,5))
-    plt.plot(df["seed"], df["gpr_r2_score"], 'o-')
-    plt.xlabel("Seed")
-    plt.ylabel("R² Score")
-    plt.title(f"Seeds vs R² Score ({emulator_name})")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
-
-    print(f"[INFO] Seeds vs Score plot saved to: {save_path}")
-
 # === 示例调用方式（请替换为你自己的数据文件名） ===
 emulator = "highlowmod_ice"
 forcing = "rcp85.1"
