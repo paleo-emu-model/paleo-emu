@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "paleo-emu"
+version = "0.1.0"
+description = "A project for paleo-environmental modeling."
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+homepage = "https://github.com/paleo-emu-model/paleo-emu"
+repository = "https://github.com/paleo-emu-model/paleo-emu"
+keywords = ["paleo", "environment", "modeling"]
+
+[tool.hatch.version]
+path = "paleo_emu/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["README.md", "LICENSE"]
+
+[tool.hatch.build.targets.wheel]

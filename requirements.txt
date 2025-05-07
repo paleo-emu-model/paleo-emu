@@ -7,3 +7,4 @@ scikit-learn
 xarray
 pydata_sphinx_theme
 pillow
+tensorflow
