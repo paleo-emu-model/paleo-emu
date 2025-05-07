@@ -1,6 +1,6 @@
 
 # from src.optimise import full_emulator_experiment
-from src.training import run_training
+from paleo_emu.training import run_training
 
 emulator = "highlowmod_ice"
 forcing = "rcp85.1"

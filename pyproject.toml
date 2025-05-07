@@ -18,7 +18,9 @@ keywords = ["paleo", "environment", "modeling"]
 [tool.hatch.version]
 path = "paleo_emu/__init__.py"
 
+
 [tool.hatch.build.targets.sdist]
 include = ["README.md", "LICENSE"]
 
 [tool.hatch.build.targets.wheel]
+packages = ["paleo_emu"]
