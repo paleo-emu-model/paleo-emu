@@ -3,3 +3,5 @@ docs/source/auto_examples
 *.png
 *.nc    
 *.res
+training/maps
+training/plots
