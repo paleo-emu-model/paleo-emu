@@ -4,6 +4,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin
 from sklearn.model_selection import train_test_split
+from sklearn.multioutput import MultiOutputRegressor  
 
 # =============================================================================
 # 1. Synthetic Data Generation
@@ -55,28 +56,32 @@ class MapReconstructor(BaseEstimator, TransformerMixin):
         return y_maps
 
 class PCARegressor(BaseEstimator, RegressorMixin):
-    """Combines PCA and regression into a single step."""
+    """Combines PCA and regression into a single step (now multi-output-aware)."""
     def __init__(self, n_components, height, width, regressor=None):
         self.n_components = n_components
         self.height = height
         self.width = width
-        self.regressor = regressor if regressor else LinearRegression()
+        # Wrap the regressor in MultiOutputRegressor
+        self.regressor = MultiOutputRegressor(
+            regressor if regressor else LinearRegression()
+        )
         self.pca = PCA(n_components=n_components)
 
     def fit(self, X, y):
         y_flat = y.reshape(-1, self.height * self.width)
         self.pca.fit(y_flat)
         y_pca = self.pca.transform(y_flat)
-        self.regressor.fit(X, y_pca)
+        self.regressor.fit(X, y_pca)  # Now handles multi-output
         return self
 
     def predict(self, X):
-        y_pca = self.regressor.predict(X)
+        y_pca = self.regressor.predict(X)  # Predicts all PCA components
         y_flat = self.pca.inverse_transform(y_pca)
         y_maps = y_flat.reshape(-1, self.height, self.width)
-        y_maps = np.maximum(y_maps, 0)
-        y_maps = y_maps / y_maps.sum(axis=(1, 2), keepdims=True)
+        y_maps = np.maximum(y_maps, 0)  # Enforce non-negativity
+        y_maps = y_maps / y_maps.sum(axis=(1, 2), keepdims=True)  # Normalize
         return y_maps
+    
 
 # =============================================================================
 # 3. Build and Run Pipeline
