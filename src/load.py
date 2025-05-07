@@ -1,4 +1,8 @@
 
+import xarray as xr
+import pandas as pd
+from pathlib import Path
+
 
 # ===== 模块 1：加载数据 =====
 def load_training_data(cfg):
@@ -36,3 +40,25 @@ def load_training_data(cfg):
     lon_array = ds[lon_name].values
 
     return X, Y_flat, var_name, Y.shape[1:], lat_array, lon_array
+
+
+
+
+# ===== 模块 4：加载预测forcing数据 =====
+def load_forcing_data(forcing_cfg):
+    """
+    加载预测阶段的 forcing 输入数据。
+
+    参数：
+        forcing_cfg: dict，包含以下字段：
+            - "file_path": 基础路径
+            - "forcing_file": .res 文件名（预测用）
+
+    返回：
+        X_pred: shape = (n_samples, 5)，预测用输入特征
+    """
+    forcing_path = Path(forcing_cfg["file_path"]) / forcing_cfg["forcing_input"]
+    df = pd.read_csv(forcing_path, sep=r"\s+", skiprows=1, header=None)
+    df.columns = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
+    X_pred = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']].to_numpy()
+    return X_pred

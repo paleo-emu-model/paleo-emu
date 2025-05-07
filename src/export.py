@@ -1,4 +1,11 @@
 
+import xarray as xr
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
+import os
+
 
 # ===== 模块 2：特征提取模块（PCA / VAE） =====
 def save_training_log(epoch_losses, seed, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
@@ -52,3 +59,34 @@ def save_training_log(epoch_losses, seed, latent_dim, epochs, learning_rate, bat
         df.to_csv(log_file, index=False)
 
     print(f"[INFO] Hyperparameter log updated: {log_file}")
+
+
+def save_prediction(Y_pred, output_dir, file_name="prediction"):
+    """
+    保存预测结果。
+    
+    参数：
+        Y_pred: (n_samples, lat, lon) 的预测数组
+        output_dir: 保存文件夹路径
+        file_name: 文件基本名（不要加后缀）
+        save_as_netcdf: 是否保存为 .nc 格式；否则保存为 .npy 格式
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 保存为 netCDF 格式
+    n_samples, lat, lon = Y_pred.shape
+    da = xr.DataArray(
+        data=Y_pred,
+        dims=["sample", "lat", "lon"],
+        coords={
+            "sample": np.arange(n_samples),
+            "lat": np.arange(lat),
+            "lon": np.arange(lon),
+        },
+        name="prediction"
+    )
+    ds = xr.Dataset({"prediction": da})
+    save_path = output_dir / f"{file_name}.nc"
+    ds.to_netcdf(save_path)
+    print(f"[INFO] Prediction saved to {save_path}")

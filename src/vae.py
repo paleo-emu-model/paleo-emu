@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
+from src.vae import VAE
 
 # ======== 模块2.0： VAE 定义 =========
 class VAE(tf.keras.Model):

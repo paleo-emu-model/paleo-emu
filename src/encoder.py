@@ -1,4 +1,14 @@
 
+import numpy as np
+
+import tensorflow as tf
+
+from sklearn.decomposition import PCA
+
+from src.vae import VAE, compute_vae_loss
+from src.export import save_training_log
+
+
 # old code, keep it for now
 def extract_features(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, seed=1024, vae_config=None):
     print(f"[INFO] Raw Y_flat min={np.min(Y_flat)}, max={np.max(Y_flat)}, mean={np.mean(Y_flat)}, std={np.std(Y_flat)}")
