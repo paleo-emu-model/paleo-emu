@@ -5,3 +5,6 @@ docs/source/auto_examples
 *.res
 training/maps
 training/plots
+.DS_Store
+__pycache__/
+.vscode/
