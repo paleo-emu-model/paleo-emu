@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.datasets import make_regression
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
@@ -13,9 +13,9 @@ from sklearn.base import BaseEstimator, TransformerMixin
 # 1. Generate Synthetic Data (y rows sum to 1)
 # ----------------------
 X, y_raw = make_regression(
-    n_samples=1000, # model runs
-    n_features=10, # model parameters
-    n_targets=5,  # weights of each map
+    n_samples=1000,
+    n_features=10,
+    n_targets=5,
     noise=0.1,
     random_state=42
 )
@@ -23,7 +23,7 @@ y = y_raw / y_raw.sum(axis=1, keepdims=True)  # Normalize rows to sum=1
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # ----------------------
-# 2. Define Custom Transformer (for y)
+# 2. Custom PCA Transformer for y (with n_components tuning)
 # ----------------------
 class PCATargetTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, n_components=2):
@@ -38,34 +38,49 @@ class PCATargetTransformer(BaseEstimator, TransformerMixin):
         return self.pca.transform(y)
 
     def inverse_transform(self, y):
-        y_inv = self.pca.inverse_transform(y)
-        return y_inv / y_inv.sum(axis=1, keepdims=True)  # Normalize rows to sum=1
+        return self.pca.inverse_transform(y)  # No renormalization
 
 # ----------------------
-# 3. Build the Pipeline (with TransformedTargetRegressor)
+# 3. Build Pipeline with TransformedTargetRegressor
 # ----------------------
-# Inner pipeline: Processes X only (scaling + multi-output SVR)
 inner_pipeline = Pipeline([
     ('scaler_x', StandardScaler()),
-    ('regressor', MultiOutputRegressor(SVR(kernel='linear')))
+    ('regressor', MultiOutputRegressor(SVR()))
 ])
 
-# Outer pipeline: Wraps inner_pipeline with target transformation
 pipeline = Pipeline([
-    ('inner_model', TransformedTargetRegressor(
+    ('model', TransformedTargetRegressor(
         regressor=inner_pipeline,
-        transformer=PCATargetTransformer(n_components=2)  # PCA reduces y to 2D
+        transformer=PCATargetTransformer()  # n_components will be tuned
     ))
 ])
 
 # ----------------------
-# 4. Train and Evaluate
+# 4. Define Hyperparameter Grid
 # ----------------------
-pipeline.fit(X_train, y_train)
-y_pred = pipeline.predict(X_test)
+param_grid = {
+    'model__transformer__n_components': [2, 3, 4],  # PCA components for y
+    'model__regressor__regressor__estimator__C': [0.1, 1, 10],  # SVR hyperparameters
+    'model__regressor__regressor__estimator__kernel': ['linear', 'rbf']
+}
 
-# Verify predictions sum to 1
-print("Predicted y_test sums:", np.round(y_pred.sum(axis=1)[:5]))  # [1. 1. 1. 1. 1.]
+# ----------------------
+# 5. Run GridSearchCV
+# ----------------------
+grid_search = GridSearchCV(
+    estimator=pipeline,
+    param_grid=param_grid,
+    cv=5,
+    scoring='neg_mean_absolute_error',  # Or any regression metric
+    verbose=2,
+    n_jobs=-1
+)
 
-# Check PCA reconstruction error
-print("Mean absolute error:", np.mean(np.abs(y_test - y_pred)))
+grid_search.fit(X_train, y_train)
+
+# ----------------------
+# 6. Evaluate Best Model
+# ----------------------
+print("Best parameters:", grid_search.best_params_)
+y_pred = grid_search.predict(X_test)
+print("Test MAE:", np.mean(np.abs(y_test - y_pred)))
