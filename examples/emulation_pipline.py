@@ -26,11 +26,6 @@ from pathlib import Path
 import random
 import os
 
-def set_seed(seed=42):
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
 
 # ===== 模块 1：加载数据 =====
 def load_training_data(cfg):
