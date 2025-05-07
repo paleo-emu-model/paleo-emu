@@ -8,3 +8,4 @@ training/plots
 .DS_Store
 __pycache__/
 .vscode/
+*.h5
