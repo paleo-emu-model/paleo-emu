@@ -1,0 +1,6 @@
+
+		begin
+      f = addfile("/Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/examples/example_outputs/training_data_highmodice_temp_formatted.nc","r")
+      print(f)
+		end
+    

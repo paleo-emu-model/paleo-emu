@@ -1,0 +1,13 @@
+"""
+This function fits the training data such 
+that it can be used for prediction
+
+The goal is to predict the weights (w) of each simulation.
+Each weight is then normalized such that all simulations sum to 1.
+
+
+The pipeline will be as follows:
+
+1. 
+
+"""
