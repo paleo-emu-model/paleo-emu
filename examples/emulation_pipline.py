@@ -26,221 +26,11 @@ from pathlib import Path
 import random
 import os
 
+from src.vae import VAE, compute_vae_loss
+from src.load import load_training_data
+from src.export import save_training_log
+from src.encoder import extract_features
 
-# ===== 模块 1：加载数据 =====
-def load_training_data(cfg):
-    """
-    加载训练数据。
-    参数：
-        cfg: 配置字典，包含文件路径信息。
-             - cfg["file_path"]: 基础目录
-             - cfg["X_input"]: X 的 .res 文件名
-             - cfg["Y_output"]: Y 的 .nc 文件名
-    返回：
-        X: (n_samples, 5) 的输入特征矩阵
-        Y_flat: 展平后的输出 (n_samples, lat*lon)
-        var_name: Y 中的变量名
-        spatial_shape: 原始的 (lat, lon) 形状
-    """
-    # 拼接路径
-    base_path = Path(cfg["file_path"])
-    x_path = base_path / cfg["X_input"]
-    y_path = base_path / cfg["Y_output"]
-
-    # 读取 X 数据
-    df = pd.read_csv(x_path, sep=r"\s+", header=None)
-    df.columns = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
-    X = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']].to_numpy()
-
-    # 读取 Y 数据
-    ds = xr.open_dataset(y_path)
-    var_name = list(ds.data_vars)[0]
-    lat_name = ds[var_name].dims[1]
-    lon_name = ds[var_name].dims[2]
-    Y = ds[var_name].values  # (n_samples, lat, lon)
-    Y_flat = Y.reshape(Y.shape[0], -1)
-    lat_array = -ds[lat_name].values
-    lon_array = ds[lon_name].values
-
-    return X, Y_flat, var_name, Y.shape[1:], lat_array, lon_array
-
-# ======== 模块2.0： VAE 定义 =========
-class VAE(tf.keras.Model):
-    def __init__(self, input_dim, latent_dim):
-        super(VAE, self).__init__()
-        self.latent_dim = latent_dim
-        # 编码器
-        self.encoder = models.Sequential([
-            layers.InputLayer(input_shape=(input_dim,)),    # input_dim=7008
-            layers.Dense(4096, activation="relu"),           # 先减半，7008 → 4096
-            layers.Dense(2048, activation="relu"),           # 再减半，4096 → 2048
-            layers.Dense(4096, activation="relu"),           # 保持信息展开
-            layers.Dense(latent_dim * 2)                           # 最后输出 mean 和 logvar，(batch_size, 4096)
-        ])
-        # 解码器
-        self.decoder = models.Sequential([
-            layers.InputLayer(input_shape=(latent_dim,)),
-            layers.Dense(4096, activation="relu"),
-            layers.Dense(2048, activation="relu"),
-            layers.Dense(2048, activation="relu"),   # 👈 这里再加一层
-            layers.Dense(1024, activation="relu"),
-            layers.Dense(7008)
-        ])
-
-
-    def reparameterize(self, mean, logvar):
-        batch = tf.shape(mean)[0]
-        dim = tf.shape(mean)[1]
-        eps = tf.random.normal(shape=(batch, dim))
-        return eps * tf.exp(logvar * 0.5) + mean
-
-    def call(self, x):
-        x_encoded = self.encoder(x)
-        mean, logvar = tf.split(x_encoded, num_or_size_splits=2, axis=1)
-        z = self.reparameterize(mean, logvar)
-        x_decoded = self.decoder(z)
-        return x_decoded, mean, logvar
-
-def compute_vae_loss(x, x_decoded, mean, logvar):
-    reconstruction_loss = tf.reduce_mean(tf.square(x - x_decoded))
-    kl_loss = -0.5 * tf.reduce_mean(1 + logvar - tf.square(mean) - tf.exp(logvar))
-    return reconstruction_loss + kl_loss
-
-# ===== 模块 2：特征提取模块（PCA / VAE） =====
-def save_training_log(epoch_losses, seed, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
-    """
-    保存VAE训练日志，包括：
-    - loss曲线图
-    - 超参数+最终loss的CSV记录
-    """
-
-    # --- 创建logs目录 ---
-    os.makedirs(log_dir, exist_ok=True)
-
-    # --- 统一格式化信息 ---
-    info_str = f"seed{seed}_latent{latent_dim}_ep{epochs}_lr{learning_rate}_bs{batch_size}_kl{kl_weight}"
-
-    # --- 保存loss曲线 ---
-    loss_curve_filename = os.path.join(log_dir, f"loss_curve_{info_str}.png")
-
-    plt.figure(figsize=(8,5))
-    plt.plot(range(1, len(epoch_losses)+1), epoch_losses, label="Training Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title(f"VAE Loss Curve ({info_str})")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(loss_curve_filename, dpi=300)
-    plt.close()
-
-    print(f"[INFO] Loss curve saved to: {loss_curve_filename}")
-
-    # --- 保存超参数和最终loss到CSV ---
-    log_file = os.path.join(log_dir, "vae_hyperparameter_log.csv")
-
-    log_entry = {
-        "seed": seed,
-        "latent_dim": latent_dim,
-        "epochs": epochs,
-        "learning_rate": learning_rate,
-        "batch_size": batch_size,
-        "kl_weight": kl_weight,
-        "final_loss": epoch_losses[-1]  # 最后一个epoch的loss
-    }
-
-    if not os.path.exists(log_file):
-        df = pd.DataFrame([log_entry])
-        df.to_csv(log_file, index=False)
-    else:
-        df = pd.read_csv(log_file)
-        df = pd.concat([df, pd.DataFrame([log_entry])], ignore_index=True)
-        df.to_csv(log_file, index=False)
-
-    print(f"[INFO] Hyperparameter log updated: {log_file}")
-
-# old code, keep it for now
-def extract_features(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, seed=1024, vae_config=None):
-    print(f"[INFO] Raw Y_flat min={np.min(Y_flat)}, max={np.max(Y_flat)}, mean={np.mean(Y_flat)}, std={np.std(Y_flat)}")
-    
-    mean_val = np.mean(Y_flat)
-    std_val = np.std(Y_flat)
-    Y_flat = (Y_flat - mean_val) / std_val
-    print(f"[INFO] Y_flat standardized to mean ~0, std ~1")
-
-    if encoder == "PCA":
-        print("[INFO] Using PCA for feature extraction.")
-        pca_model = PCA(n_components=pca_variance_ratio)
-        Y_pca = pca_model.fit_transform(Y_flat)
-
-        print(f"PCA n_components_: {pca_model.n_components_}")
-        print(f"Sum explained variance: {np.sum(pca_model.explained_variance_ratio_)}")
-
-    elif encoder == "VAE":
-        print("[INFO] Using VAE for feature extraction.")
-
-        # === 从vae_config读超参数 ===
-        if vae_config is None:
-            vae_config = {"latent_dim": 256, "epochs": 150, "learning_rate": 1e-4, "batch_size": 64}
-
-        latent_dim = vae_config.get("latent_dim", 256)
-        epochs = vae_config.get("epochs", 150)
-        learning_rate = vae_config.get("learning_rate", 1e-4)
-        batch_size = vae_config.get("batch_size", 64)
-        kl_weight = vae_config.get("kl_weight", 1.0)  # 预留，如果以后加β-VAE
-
-        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-        input_dim = Y_flat.shape[1]
-        vae_model = VAE(input_dim, latent_dim)
-
-        dataset = tf.data.Dataset.from_tensor_slices((Y_flat.astype('float32')))
-        dataset = dataset.shuffle(buffer_size=1024).batch(batch_size)
-
-        epoch_losses = []
-
-        for epoch in range(epochs):
-            total_loss = 0
-            for step, x_batch in enumerate(dataset):
-                with tf.GradientTape() as tape:
-                    x_decoded, mean, logvar = vae_model(x_batch)
-                    loss = compute_vae_loss(x_batch, x_decoded, mean, logvar) * kl_weight  # 预留β-VAE调整点
-
-                grads = tape.gradient(loss, vae_model.trainable_variables)
-                optimizer.apply_gradients(zip(grads, vae_model.trainable_variables))
-                total_loss += loss
-
-            avg_loss = total_loss / (step + 1)
-            epoch_losses.append(avg_loss.numpy())
-
-            if epoch % 10 == 0 or epoch == epochs-1:
-                print(f"[VAE] Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}")
-
-        save_training_log(
-            epoch_losses=epoch_losses,
-            seed=seed,
-            latent_dim=latent_dim,
-            epochs=epochs,
-            learning_rate=learning_rate,
-            batch_size=batch_size,
-            kl_weight=kl_weight
-        )
-
-        mean_logvar = vae_model.encoder(Y_flat)
-        mean, logvar = tf.split(mean_logvar, num_or_size_splits=2, axis=1)
-        eps = tf.random.normal(shape=tf.shape(mean))
-        latent = mean + eps * tf.exp(0.5 * logvar)
-        # if model_type == "GPR":
-        #     Y_pca = mean.numpy()
-        # elif model_type == "LGBM":
-        #     Y_pca = latent.numpy()
-        Y_pca = mean.numpy()
-
-        pca_model = vae_model
-
-    else:
-        raise ValueError("[ERROR] encoder must be either 'PCA' or 'VAE'.")
-
-    return Y_pca, pca_model, mean_val, std_val
 
 # ===== 模块 3：构建regressor =====
 def build_regressor(model_type="GPR", kernel_name="RBF_White", encoder="PCA"):
@@ -330,13 +120,12 @@ def load_forcing_data(forcing_cfg):
 
 # separate train and test before PCA
 def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, seed=42, return_pred=True):
-    set_seed(seed)
 
     # 1. 加载原始数据
     X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
 
     # 2. 划分原始数据
-    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2, random_state=42)
+    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2, random_state=seed)
 
     # 3. 对 Y_train_flat 进行特征提取（fit和transform）
     Y_train_encoded, feature_extractor, mean_val, std_val = extract_features(
