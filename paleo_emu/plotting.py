@@ -42,7 +42,7 @@ def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, k
     
     # 绘制r2 map
     cmap = plt.get_cmap('viridis')
-    im = ax.pcolormesh(Lon, Lat, r2_map, cmap=cmap, vmin=0.7, vmax=1, shading='auto', transform=ccrs.PlateCarree())
+    im = ax.pcolormesh(Lon, Lat, r2_map, cmap=cmap, vmin=0.8, vmax=1, shading='auto', transform=ccrs.PlateCarree())
 
     cbar = plt.colorbar(im, orientation='horizontal', pad=0.05, aspect=50)
     cbar.set_label('R² Score')
@@ -98,7 +98,7 @@ def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array,
     axs[1].set_title(f"Predicted {title_suffix}")
     plt.colorbar(im1, ax=axs[1], fraction=0.046, pad=0.04)
 
-    im2 = axs[2].imshow(error_map, transform=ccrs.PlateCarree(), extent=extent, cmap='RdBu_r', vmin=-2.0, vmax=2.0)
+    im2 = axs[2].imshow(error_map, transform=ccrs.PlateCarree(), extent=extent, cmap='RdBu_r', vmin=-0.5, vmax=0.5)
     axs[2].set_title(f"bias (Pred - True) {title_suffix}")
     plt.colorbar(im2, ax=axs[2], fraction=0.046, pad=0.04)
 

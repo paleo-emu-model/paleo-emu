@@ -1,8 +1,8 @@
 
 # from src.optimise import full_emulator_experiment
-from paleo_emu.training import run_training
+from paleo_emu.training_leave1out import run_training
 
-emulator = "highlowmod_ice"
+emulator = "lowmod_ice"
 forcing = "rcp85.1"
 
 seeds = 2025
@@ -18,19 +18,19 @@ vae_config = {
 # config_dict.py
 train_dict = {
     "lowmod_ice": {
-        "file_path": "/Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/examples/example_outputs/",
+        "file_path": "/Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/examples/training_data/",
         "X_input": "training_data_lowmodice_temp_formatted.res",
         "Y_output": "training_data_lowmodice_temp_formatted.nc",
         "label": "lowmod_ice"
     },
     "highmod_ice": {
-        "file_path": "/Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/examples/example_outputs/",
+        "file_path": "/Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/examples/training_data/",
         "X_input": "training_data_highmodice_temp_formatted.res",
         "Y_output": "training_data_highmodice_temp_formatted.nc",
         "label": "highmod_ice"
     },
     "highlowmod_ice": {
-        "file_path": "/Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/examples/example_outputs/",
+        "file_path": "/Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/examples/training_data/",
         "X_input": "training_data_highlowmodice_temp_formatted.res",
         "Y_output": "training_data_highlowmodice_temp_formatted.nc",
         "label": "highlowmod_ice"
@@ -45,5 +45,5 @@ train_dict = {
 # full_emulator_experiment(train_dict, emulator_name=emulator, output_dir="training/",seed=seeds, vae_config=vae_config)
 
 # ===单次训练===
-emulator = run_training(train_dict[emulator],model_type="LGBM",kernel="RationalQuadratic",encoder="PCA", vae_config=vae_config, seed=seeds, return_pred=True)
+emulator = run_training(train_dict[emulator],model_type="GPR",kernel="Matern_2.5_White",encoder="VAE", vae_config=vae_config, seed=seeds, return_pred=True)
 
