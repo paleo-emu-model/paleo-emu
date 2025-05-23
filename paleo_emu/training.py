@@ -97,7 +97,7 @@ def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_
         # 画图
         r2_map = compute_r2_map(Y_test_out, Y_pred_out, lat_array, lon_array)
         plot_r2_map_with_latlon(r2_map, lat_array=lat_array, lon_array=lon_array, model_type=model_type,
-                                encoder=encoder, kernel=kernel, save_dir="training/logs")
+                                encoder=encoder, kernel=kernel, save_dir="outputs/logs")
         for timestep in [0, 1, 2, 3, 999]:
             plot_prediction_maps_with_info(
                 Y_test_out,
@@ -108,7 +108,7 @@ def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_
                 emulator_name=model_type,
                 encoder_name=encoder,
                 kernel_name=kernel,
-                save_folder="training/maps",
+                save_folder="outputs/maps",
                 title_suffix=f"Timestep {timestep}"
             )
 

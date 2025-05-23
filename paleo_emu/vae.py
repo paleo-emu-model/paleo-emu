@@ -1,8 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
-from paleo_emu.vae import VAE
-
 # ======== 模块2.0： VAE 定义 =========
 class VAE(tf.keras.Model):
     def __init__(self, input_dim, latent_dim):
