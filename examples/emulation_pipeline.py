@@ -1,4 +1,8 @@
 """
+=============
+Pipeline Example
+=============
+
 This script is used to run the emulator training pipeline for the Paleo-Emu project.
 """
 
