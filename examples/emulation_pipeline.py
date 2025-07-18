@@ -3,11 +3,13 @@
 import os
 from paleo_emu.training_leave1out import run_training
 
+# define emulator training data
 emulator = "lowmod_ice"
 forcing = "rcp85.1"
 
 seeds = 2025
 
+# define VAE configuration
 vae_config = {
     "latent_dim": 1024, # 32, 64, 128, 256，512， 1024
     "epochs": 80,
@@ -18,7 +20,7 @@ vae_config = {
 
 file_path = os.path.join(".", "examples", "training_data")
 
-# config_dict.py
+# define inputs
 train_dict = {
     "lowmod_ice": {
         "file_path": file_path,
@@ -40,6 +42,6 @@ train_dict = {
     }
 }
 
-# ===单次训练===
+# run emulator training
 emulator = run_training(train_dict[emulator],model_type="GPR",kernel="Matern_2.5_White",encoder="VAE", vae_config=vae_config, seed=seeds, return_pred=True)
 
