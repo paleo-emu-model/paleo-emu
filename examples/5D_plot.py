@@ -1,3 +1,11 @@
+"""
+==========================
+3D Scatter Plot Example
+==========================
+Plot example for a 3D scatter plot using matplotlib.
+
+"""
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
