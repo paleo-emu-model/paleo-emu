@@ -1,6 +1,11 @@
 Examples
 ========
 
-Here you can see how the scripts in the examples folder are rendered
+=============Part 1 Training==============
+Step 1: edit training_dict_xxx.py
+Step 2: run formatting_training_data.py 
+Step 3: run processing_training_data.py 
 
-.. _example-gallery:
+=============Part 2 Prediction============
+
+

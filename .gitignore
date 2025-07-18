@@ -1,2 +1,11 @@
 docs/build/
 docs/source/auto_examples
+*.png
+*.nc    
+*.res
+training/maps
+training/plots
+.DS_Store
+__pycache__/
+.vscode/
+*.h5
