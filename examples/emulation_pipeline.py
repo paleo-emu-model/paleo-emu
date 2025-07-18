@@ -1,3 +1,8 @@
+"""
+This script is used to run the emulator training pipeline for the Paleo-Emu project.
+"""
+
+
 
 # from src.optimise import full_emulator_experiment
 import os
