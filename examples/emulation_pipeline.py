@@ -40,13 +40,6 @@ train_dict = {
     }
 }
 
-# ===无需遍历所有组合，直接指定模型和编码器===
-# model_type = "GPR"  # "GPR" or "LGBM"
-# kernels = {"RBF", "Matern_1.5", "Matern_0.5_White", "RationalQuadratic", "RBF_White", "Matern_2.5_White"}
-
-# ===遍历所有组合===
-# full_emulator_experiment(train_dict, emulator_name=emulator, output_dir="training/",seed=seeds, vae_config=vae_config)
-
 # ===单次训练===
 emulator = run_training(train_dict[emulator],model_type="GPR",kernel="Matern_2.5_White",encoder="VAE", vae_config=vae_config, seed=seeds, return_pred=True)
 
