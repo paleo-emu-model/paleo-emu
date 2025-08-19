@@ -1,8 +1,13 @@
+"""
+This module is a way to train models to get the best parameters using leave-one-out cross-validation.
+"""
+
 import numpy as np
+import xarray as xr
+import os
+import time
 
 import tensorflow as tf
-
-import time
 
 from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
@@ -10,17 +15,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 
-
 from paleo_emu.load import load_training_data
 from paleo_emu.encoder import encode
 from paleo_emu.regressor import build_regressor
 from paleo_emu.plotting import plot_r2_map_with_latlon, plot_prediction_maps_with_info
 from paleo_emu.validation import compute_r2_map
-import xarray as xr
-import os
 
 # separate train and test before PCA
-def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, seed=42, return_pred=True):
+def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, seed=42,  return_validation=True):
 
     # 1. 加载原始数据
     X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)

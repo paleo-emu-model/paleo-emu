@@ -31,7 +31,7 @@ def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, se
     elif encoder == "VAE":
         print("[INFO] Using VAE for feature extraction.")
 
-        # === 从vae_config读超参数 ===
+        # read in VAE config
         if vae_config is None:
             vae_config = {"latent_dim": 256, "epochs": 150, "learning_rate": 1e-4, "batch_size": 64}
 
@@ -39,7 +39,7 @@ def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, se
         epochs = vae_config.get("epochs", 150)
         learning_rate = vae_config.get("learning_rate", 1e-4)
         batch_size = vae_config.get("batch_size", 64)
-        kl_weight = vae_config.get("kl_weight", 1.0)  # 预留，如果以后加β-VAE
+        kl_weight = vae_config.get("kl_weight", 1.0)  # save it for β-VAE if needed
 
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
         input_dim = Y_flat.shape[1]
@@ -55,7 +55,7 @@ def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, se
             for step, x_batch in enumerate(dataset):
                 with tf.GradientTape() as tape:
                     x_decoded, mean, logvar = vae_model(x_batch)
-                    loss = compute_vae_loss(x_batch, x_decoded, mean, logvar) * kl_weight  # 预留β-VAE调整点
+                    loss = compute_vae_loss(x_batch, x_decoded, mean, logvar) * kl_weight  # save it for β-VAE if needed
 
                 grads = tape.gradient(loss, vae_model.trainable_variables)
                 optimizer.apply_gradients(zip(grads, vae_model.trainable_variables))

@@ -1,25 +1,24 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
-# ======== 模块2.0： VAE 定义 =========
 class VAE(tf.keras.Model):
     def __init__(self, input_dim, latent_dim):
         super(VAE, self).__init__()
         self.latent_dim = latent_dim
-        # 编码器
+        # encoder
         self.encoder = models.Sequential([
             layers.InputLayer(input_shape=(input_dim,)),    # input_dim=7008
-            layers.Dense(4096, activation="relu"),           # 先减半，7008 → 4096
-            layers.Dense(2048, activation="relu"),           # 再减半，4096 → 2048
-            layers.Dense(4096, activation="relu"),           # 保持信息展开
-            layers.Dense(latent_dim * 2)                           # 最后输出 mean 和 logvar，(batch_size, 4096)
+            layers.Dense(4096, activation="relu"),           # 7008 → 4096
+            layers.Dense(2048, activation="relu"),           # 4096 → 2048
+            layers.Dense(4096, activation="relu"),           # 2048 → 4096
+            layers.Dense(latent_dim * 2)                           # gives mean and logvar
         ])
-        # 解码器
+        # decoder
         self.decoder = models.Sequential([
             layers.InputLayer(input_shape=(latent_dim,)),
             layers.Dense(4096, activation="relu"),
             layers.Dense(2048, activation="relu"),
-            layers.Dense(2048, activation="relu"),   # 👈 这里再加一层
+            layers.Dense(2048, activation="relu"),   # 👈 add another layer here
             layers.Dense(1024, activation="relu"),
             layers.Dense(7008)
         ])

@@ -1,19 +1,19 @@
+"""
+This script is used for emulator validation.
+calculate R² scores for each grid point.
+
+Parameters:
+- Y_true_out: (n_samples, lat, lon)
+- Y_pred_out: (n_samples, lat, lon)
+
+Returns:
+- r2_map: (lat, lon)
+"""
 
 import numpy as np
 from sklearn.metrics import r2_score
 
-
 def compute_r2_map(Y_true_out, Y_pred_out,lat_array, lon_array):
-    """
-    对每个格点计算R²分数。
-
-    参数：
-    - Y_true_out: (n_samples, lat, lon)
-    - Y_pred_out: (n_samples, lat, lon)
-
-    返回：
-    - r2_map: (lat, lon)
-    """
     n_samples, lat, lon = Y_true_out.shape
     r2_map = np.full((lat, lon), np.nan)
     for i in range(len(lat_array)):
