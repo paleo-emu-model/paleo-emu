@@ -12,7 +12,7 @@ from sklearn.metrics import r2_score
 
 
 from paleo_emu.load import load_training_data
-from paleo_emu.encoder import extract_features
+from paleo_emu.encoder import encode
 from paleo_emu.regressor import build_regressor
 from paleo_emu.plotting import plot_r2_map_with_latlon, plot_prediction_maps_with_info
 from paleo_emu.validation import compute_r2_map
@@ -44,7 +44,7 @@ def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_
         Y_test_flat = Y_flat[test_indices]
 
         # 特征提取
-        Y_train_encoded, feature_extractor, mean_val, std_val = extract_features(
+        Y_train_encoded, feature_extractor, mean_val, std_val = encode(
             Y_train_flat,
             encoder=encoder,
             pca_variance_ratio=pca_variance_ratio,

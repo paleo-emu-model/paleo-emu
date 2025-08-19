@@ -1,4 +1,6 @@
-
+"""
+This module is used to encode (i.e., reduce dimensionality) data using PCA or VAE.
+"""
 import numpy as np
 
 import tensorflow as tf
@@ -10,7 +12,7 @@ from paleo_emu.export import save_training_log
 
 
 # old code, keep it for now
-def extract_features(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, seed=1024, vae_config=None):
+def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, seed=1024, vae_config=None):
     print(f"[INFO] Raw Y_flat min={np.min(Y_flat)}, max={np.max(Y_flat)}, mean={np.mean(Y_flat)}, std={np.std(Y_flat)}")
     
     mean_val = np.mean(Y_flat)

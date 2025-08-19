@@ -1,12 +1,24 @@
+"""
+This module provides functions to load training and forcing data for the paleo-EMU.
+"""
 
 import xarray as xr
 import pandas as pd
 from pathlib import Path
 
-
 # ===== 模块 1：加载数据 =====
 def load_training_data(cfg):
     """
+    load training data.
+    parameter:
+        cfg: configuration dictionary containing file path information.
+            - cfg["file_path"]: base directory
+            - cfg["X_input"]: .res file name for X
+    return:
+        X: (n_samples, 5) the input feature matrix
+        Y_flat: (n_samples, lat*lon) the flattened output matrix
+        var_name: variable name in Y
+        spatial_shape: original (lat, lon) shape
     加载训练数据。
     参数：
         cfg: 配置字典，包含文件路径信息。
@@ -19,17 +31,17 @@ def load_training_data(cfg):
         var_name: Y 中的变量名
         spatial_shape: 原始的 (lat, lon) 形状
     """
-    # 拼接路径
+    # join paths
     base_path = Path(cfg["file_path"])
     x_path = base_path / cfg["X_input"]
     y_path = base_path / cfg["Y_output"]
 
-    # 读取 X 数据
+    # read X
     df = pd.read_csv(x_path, sep=r"\s+", header=None)
     df.columns = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
     X = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']].to_numpy()
 
-    # 读取 Y 数据
+    # read Y
     ds = xr.open_dataset(y_path)
     var_name = list(ds.data_vars)[0]
     lat_name = ds[var_name].dims[1]
@@ -41,21 +53,16 @@ def load_training_data(cfg):
 
     return X, Y_flat, var_name, Y.shape[1:], lat_array, lon_array
 
-
-
-
 # ===== 模块 4：加载预测forcing数据 =====
 def load_forcing_data(forcing_cfg):
     """
-    加载预测阶段的 forcing 输入数据。
-
-    参数：
-        forcing_cfg: dict，包含以下字段：
-            - "file_path": 基础路径
-            - "forcing_file": .res 文件名（预测用）
-
-    返回：
-        X_pred: shape = (n_samples, 5)，预测用输入特征
+    load forcing data for prediction.
+    parameter:
+        forcing_cfg: dict containing the following fields:
+            - "file_path": base directory
+            - "forcing_file": .res file name for forcing input
+    return:
+        X_pred: shape = (n_samples, 5) the input feature matrix for prediction
     """
     forcing_path = Path(forcing_cfg["file_path"]) / forcing_cfg["forcing_input"]
     df = pd.read_csv(forcing_path, sep=r"\s+", skiprows=1, header=None)
