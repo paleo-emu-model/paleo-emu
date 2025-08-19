@@ -6,13 +6,13 @@ import cartopy.crs as ccrs
 import os
 
 
-def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, kernel, save_dir="training/maps"):
+def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, regressor_type, encoder, kernel, save_dir="examples/outputs/maps"):
     """
     save R2 map
     - r2_map: (lat, lon) 
     - lat_array: (lat,) 
     - lon_array: (lon,) 
-    - model_type: str
+    - regressor_type: str
     - encoder: str
     - kernel: str
     - save_dir
@@ -42,11 +42,11 @@ def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, k
     cbar = plt.colorbar(im, orientation='horizontal', pad=0.05, aspect=50)
     cbar.set_label('R² Score')
 
-    plt.title(f"R² Score ({model_type} | {encoder} | {kernel}) \nGlobal Mean R²: {global_mean_r2:.4f}")
+    plt.title(f"R² Score ({regressor_type} | {encoder} | {kernel}) \nGlobal Mean R²: {global_mean_r2:.4f}")
     plt.tight_layout()
 
     # save
-    filename = f"r2_map_{model_type}_{encoder}_{kernel}.png"
+    filename = f"r2_map_{regressor_type}_{encoder}_{kernel}.png"
     save_path = os.path.join(save_dir, filename)
     plt.savefig(save_path, dpi=300)
     plt.close()
@@ -54,7 +54,7 @@ def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, k
     print(f"[INFO] R² spatial map saved to: {save_path}")
 
 
-def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array, timestep=0, emulator_name="E11111", encoder_name="PCA", kernel_name="RBF", vmin=None, vmax=None, save_folder="./maps", title_suffix=""):
+def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array, timestep=0, emulator_name="E11111", encoder_name="PCA", kernel_name="RBF", vmin=None, vmax=None, save_folder="examples/outputs/maps", title_suffix=""):
     """
     plot Y_true, T_pred and Pred-True. And save info
     - Y_true_out, Y_pred_out:

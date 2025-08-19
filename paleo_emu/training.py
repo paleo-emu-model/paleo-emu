@@ -2,6 +2,12 @@
 This module is to train models using chosen regressors, kernels, and encoders.
 2 methods are used here: 2:8 validation; leave-one-out cross-validation.
 """
+# training process needs to give info like pipeline contains 
+# the trained model, decoder, std_val, and mean_val, which are used in the following prediction process
+# modularize the run_training code into one main function and 3 sub-functions
+# 1. split data
+# 2. fitting the model
+# 3. validating the model
 
 import numpy as np
 import xarray as xr
@@ -21,6 +27,7 @@ from paleo_emu.encoder import encode
 from paleo_emu.regressor import build_regressor
 from paleo_emu.plotting import plot_r2_map_with_latlon, plot_prediction_maps_with_info
 from paleo_emu.validation import compute_r2_map
+from paleo_emu.prediction import run_prediction
 
 # separate train and test before PCA
 def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, return_validation=True):
@@ -66,7 +73,19 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
 
     # using the 20% holdout X for prediction then validation.
     # To do: change the following code using prediction module
+    
     if  return_validation:
+        """
+        run_prediction:
+        X_pred = forcing_cfg
+        Y_pca_pred = pipeline.predict(X_pred)
+        Y_full = decoder.inverse_transform(Y_pca_pred)
+        n = Y_full.shape[0]
+        lat, lon = spatial_shape
+        Y_out = Y_full.reshape(n, lat, lon)
+        """
+        Y_pred_out = run_prediction(pipeline, decoder, X_test, spatial_shape)
+
         Y_pred_encoded = pipeline.predict(X_test)
 
         print(f"[debug] shape of Y_pred_encoded: {Y_pred_encoded.shape}")
@@ -119,7 +138,7 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
 
         return {
             "pipeline_model": pipeline,
-            "feature_extraction": decoder,
+            "decoder": decoder,
             "gpr_r2_score": score,
             "n_components_retained": Y_train_encoded.shape[1],
             "original_variable": var_name,
@@ -131,7 +150,6 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
             " regressor_type":  regressor_type
         }
 
-# separate train and test before PCA
 def run_training_leave_one_out(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None,  return_validation=True):
 
     # 1. 加载原始数据

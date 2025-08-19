@@ -44,5 +44,5 @@ train_dict = {
 }
 
 # run emulator training
-emulator = run_training_28(train_dict[emulator],model_type="GPR",kernel="RBF",encoder="PCA", vae_config=vae_config, return_validation=True)
+emulator = run_training_28(train_dict[emulator],regressor_type="GPR",kernel="RBF",encoder="PCA", vae_config=vae_config, return_validation=True)
 
