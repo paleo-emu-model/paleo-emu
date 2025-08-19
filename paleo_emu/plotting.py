@@ -6,24 +6,21 @@ import cartopy.crs as ccrs
 import os
 
 
-# plot_r2_map_with_latlon函数
 def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, kernel, save_dir="training/maps"):
     """
-    绘制带经纬度的R²空间分布图并保存。
-    
-    参数：
-    - r2_map: (lat, lon) 格点R²值
-    - lat_array: (lat,) 维度的纬度数组
-    - lon_array: (lon,) 维度的经度数组
+    save R2 map
+    - r2_map: (lat, lon) 
+    - lat_array: (lat,) 
+    - lon_array: (lon,) 
     - model_type: str
     - encoder: str
     - kernel: str
-    - save_dir: 保存路径
+    - save_dir
     """
 
     os.makedirs(save_dir, exist_ok=True)
 
-    # 创建网格
+    # create grids
     Lon, Lat = np.meshgrid(lon_array, lat_array)
     # Calculate global mean R² score
     # Calculate area-weighted mean R² score
@@ -34,13 +31,11 @@ def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, k
     fig = plt.figure(figsize=(12,6))
     ax = plt.axes(projection=ccrs.PlateCarree())
 
-    # 设置经纬度范围
+    # set lon and lat
     ax.set_global()
 
-    # 添加地理要素
     ax.coastlines()
     
-    # 绘制r2 map
     cmap = plt.get_cmap('viridis')
     im = ax.pcolormesh(Lon, Lat, r2_map, cmap=cmap, vmin=0.8, vmax=1, shading='auto', transform=ccrs.PlateCarree())
 
@@ -50,7 +45,7 @@ def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, k
     plt.title(f"R² Score ({model_type} | {encoder} | {kernel}) \nGlobal Mean R²: {global_mean_r2:.4f}")
     plt.tight_layout()
 
-    # 保存
+    # save
     filename = f"r2_map_{model_type}_{encoder}_{kernel}.png"
     save_path = os.path.join(save_dir, filename)
     plt.savefig(save_path, dpi=300)
@@ -61,15 +56,13 @@ def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, model_type, encoder, k
 
 def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array, timestep=0, emulator_name="E11111", encoder_name="PCA", kernel_name="RBF", vmin=None, vmax=None, save_folder="./maps", title_suffix=""):
     """
-    画Y_true, Y_pred 和误差图 (Pred-True)，并且保存图片名字包含emulator, encoder, kernel等信息。
-
-    参数：
-    - Y_true_out, Y_pred_out: 输入数据
-    - timestep: 要画的样本编号
-    - emulator_name, encoder_name, kernel_name: 用于保存文件名
-    - vmin, vmax: 色标范围，自动统一
-    - save_folder: 保存文件的目录
-    - title_suffix: 标题后缀
+    plot Y_true, T_pred and Pred-True. And save info
+    - Y_true_out, Y_pred_out:
+    - timestep: chosen timestep
+    - emulator_name, encoder_name, kernel_name
+    - vmin, vmax: color scale range, automatically unified
+    - save_folder: directory to save files
+    - title_suffix: title suffix
     """
     if timestep == 999:
         true_map = np.mean(Y_true_out, axis=0)
@@ -108,7 +101,7 @@ def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array,
 
     plt.tight_layout()
 
-    # 自动构建保存路径
+    # create save path
     os.makedirs(save_folder, exist_ok=True)
     file_name = f"{emulator_name}_{encoder_name}_{kernel_name}_sample_{timestep}.png"
     save_path = os.path.join(save_folder, file_name)

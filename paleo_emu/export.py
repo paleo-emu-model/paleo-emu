@@ -1,3 +1,8 @@
+"""
+save the training log for VAE.
+- loss curve plot
+- hyperparameter + final loss CSV record
+"""
 
 import xarray as xr
 import pandas as pd
@@ -7,21 +12,13 @@ from pathlib import Path
 import os
 
 
-# ===== 模块 2：特征提取模块（PCA / VAE） =====
-def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
-    """
-    保存VAE训练日志，包括：
-    - loss曲线图
-    - 超参数+最终loss的CSV记录
-    """
 
-    # --- 创建logs目录 ---
+def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
+
     os.makedirs(log_dir, exist_ok=True)
 
-    # --- 统一格式化信息 ---
     info_str = f"latent{latent_dim}_ep{epochs}_lr{learning_rate}_bs{batch_size}_kl{kl_weight}"
 
-    # --- 保存loss曲线 ---
     loss_curve_filename = os.path.join(log_dir, f"loss_curve_{info_str}.png")
 
     plt.figure(figsize=(8,5))
@@ -37,7 +34,7 @@ def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_siz
 
     print(f"[INFO] Loss curve saved to: {loss_curve_filename}")
 
-    # --- 保存超参数和最终loss到CSV ---
+    # --- save hyperparameters and final loss to CSV ---
     log_file = os.path.join(log_dir, "vae_hyperparameter_log.csv")
 
     log_entry = {
@@ -46,7 +43,7 @@ def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_siz
         "learning_rate": learning_rate,
         "batch_size": batch_size,
         "kl_weight": kl_weight,
-        "final_loss": epoch_losses[-1]  # 最后一个epoch的loss
+        "final_loss": epoch_losses[-1]  # the loss of the final epoch
     }
 
     if not os.path.exists(log_file):
@@ -62,18 +59,17 @@ def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_siz
 
 def save_prediction(Y_pred, output_dir, file_name="prediction"):
     """
-    保存预测结果。
-    
-    参数：
-        Y_pred: (n_samples, lat, lon) 的预测数组
-        output_dir: 保存文件夹路径
-        file_name: 文件基本名（不要加后缀）
-        save_as_netcdf: 是否保存为 .nc 格式；否则保存为 .npy 格式
+    Save the prediction results.
+    Parameters:
+        Y_pred: (n_samples, lat, lon) 
+        output_dir:path to save data
+        file_name: 
+        save_as_netcdf: .nc or .npy format
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 保存为 netCDF 格式
+    # Save as netCDF format
     n_samples, lat, lon = Y_pred.shape
     da = xr.DataArray(
         data=Y_pred,

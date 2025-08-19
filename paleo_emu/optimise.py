@@ -5,7 +5,7 @@ from paleo_emu.training import run_training
 
 def full_emulator_experiment(train_dict, emulator_name, output_dir="outputs", vae_config=None):
     """
-    全自动尝试所有model+encoder组合，并保存结果。
+    Run a full emulator experiment with all model and encoder combinations.
     """
     # model_kernel_combinations = [
     #     ("GPR", "RBF"),
@@ -30,16 +30,15 @@ def full_emulator_experiment(train_dict, emulator_name, output_dir="outputs", va
             emulator = run_training(
                 train_dict[emulator_name],
                 model_type=model_type,
-                kernel=kernel if kernel else "RBF_White",  # 给LGBM随便传一个kernel（无效但占位）
+                kernel=kernel if kernel else "RBF_White",  # invalid but placeholder
                 encoder=encoder,
                 vae_config=vae_config,
                 return_pred=True
             )
 
-            # 打印得分
             print(f"[RESULT] {model_type} + {encoder} --> Test R² Score: {emulator['gpr_r2_score']:.4f}")
 
-            # 保存预测和真实
+            # Save predictions and truth
             pred_filename = f"{emulator_name}_{model_type}_{kernel if kernel else 'None'}_{encoder}_Ypred.nc"
             true_filename = f"{emulator_name}_{model_type}_{kernel if kernel else 'None'}_{encoder}_Ytrue.nc"
 
