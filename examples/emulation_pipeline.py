@@ -1,8 +1,4 @@
 """
-=============
-Pipeline Example
-=============
-
 This script is used to run the emulator training pipeline for the Paleo-Emu project.
 """
 
@@ -52,5 +48,5 @@ train_dict = {
 }
 
 # run emulator training
-emulator = run_training(train_dict[emulator],model_type="GPR",kernel="Matern_2.5_White",encoder="VAE", vae_config=vae_config, seed=seeds,  return_validation=True)
+emulator = run_training(train_dict[emulator],model_type="GPR",kernel="Matern_2.5_White",encoder="VAE", vae_config=vae_config, seed=seeds, return_validation=True)
 

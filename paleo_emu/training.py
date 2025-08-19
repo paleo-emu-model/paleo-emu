@@ -29,7 +29,7 @@ def run_training(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_vari
     X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2, random_state=seed)
 
     # encode the chosen training Y
-    Y_train_encoded, feature_extractor, mean_val, std_val = encode(
+    Y_train_encoded, decoder, mean_val, std_val = encode(
         Y_train_flat,
         encoder=encoder,
         pca_variance_ratio=pca_variance_ratio,
@@ -41,10 +41,10 @@ def run_training(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_vari
     # transform validation Y set back for validation
     if encoder == "PCA":
         Y_test_scaled = (Y_test_flat - mean_val) / std_val
-        Y_test_encoded = feature_extractor.transform(Y_test_scaled)
+        Y_test_encoded = decoder.transform(Y_test_scaled)
     elif encoder == "VAE":
         Y_test_scaled = (Y_test_flat - mean_val) / std_val
-        mean_logvar = feature_extractor.encoder.predict(Y_test_scaled)
+        mean_logvar = decoder.encoder.predict(Y_test_scaled)
         mean, logvar = tf.split(mean_logvar, 2, axis=1)
         latent = mean + tf.random.normal(tf.shape(mean)) * tf.exp(logvar * 0.5)  # reparameterize
         # Y_test_encoded = latent.numpy()
@@ -71,14 +71,14 @@ def run_training(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_vari
 
         # inverse transform
         if encoder == "PCA":
-            Y_pred_full = feature_extractor.inverse_transform(Y_pred_encoded)
-            Y_test_full = feature_extractor.inverse_transform(Y_test_encoded)
+            Y_pred_full = decoder.inverse_transform(Y_pred_encoded)
+            Y_test_full = decoder.inverse_transform(Y_test_encoded)
             # inverse standardization
             Y_pred_full = Y_pred_full * std_val + mean_val
             Y_test_full = Y_test_full * std_val + mean_val
         elif encoder == "VAE":
-            Y_pred_full = feature_extractor.decoder.predict(Y_pred_encoded)
-            Y_test_full = feature_extractor.decoder.predict(Y_test_encoded)
+            Y_pred_full = decoder.decoder.predict(Y_pred_encoded)
+            Y_test_full = decoder.decoder.predict(Y_test_encoded)
             Y_pred_full = Y_pred_full * std_val + mean_val
             Y_test_full = Y_test_full * std_val + mean_val
         else:
@@ -116,7 +116,7 @@ def run_training(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_vari
 
         return {
             "pipeline_model": pipeline,
-            "feature_extraction": feature_extractor,
+            "feature_extraction": decoder,
             "gpr_r2_score": score,
             "n_components_retained": Y_train_encoded.shape[1],
             "original_variable": var_name,

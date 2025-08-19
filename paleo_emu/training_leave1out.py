@@ -46,7 +46,7 @@ def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_
         Y_test_flat = Y_flat[test_indices]
 
         # 特征提取
-        Y_train_encoded, feature_extractor, mean_val, std_val = encode(
+        Y_train_encoded, decoder, mean_val, std_val = encode(
             Y_train_flat,
             encoder=encoder,
             pca_variance_ratio=pca_variance_ratio,
@@ -57,10 +57,10 @@ def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_
         # 测试集编码
         if encoder == "PCA":
             Y_test_scaled = (Y_test_flat - mean_val) / std_val
-            Y_test_encoded = feature_extractor.transform(Y_test_scaled)
+            Y_test_encoded = decoder.transform(Y_test_scaled)
         elif encoder == "VAE":
             Y_test_scaled = (Y_test_flat - mean_val) / std_val
-            mean_logvar = feature_extractor.encoder.predict(Y_test_scaled)
+            mean_logvar = decoder.encoder.predict(Y_test_scaled)
             mean, logvar = tf.split(mean_logvar, 2, axis=1)
             Y_test_encoded = mean.numpy()
         else:
@@ -81,13 +81,13 @@ def run_training(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_
 
         # 还原
         if encoder == "PCA":
-            Y_pred = feature_extractor.inverse_transform(Y_pred_encoded)
-            Y_test = feature_extractor.inverse_transform(Y_test_encoded)
+            Y_pred = decoder.inverse_transform(Y_pred_encoded)
+            Y_test = decoder.inverse_transform(Y_test_encoded)
             Y_pred = Y_pred * std_val + mean_val
             Y_test = Y_test * std_val + mean_val
         elif encoder == "VAE":
-            Y_pred = feature_extractor.decoder.predict(Y_pred_encoded)
-            Y_test = feature_extractor.decoder.predict(Y_test_encoded)
+            Y_pred = decoder.decoder.predict(Y_pred_encoded)
+            Y_test = decoder.decoder.predict(Y_test_encoded)
             Y_pred = Y_pred * std_val + mean_val
             Y_test = Y_test * std_val + mean_val
         else:
