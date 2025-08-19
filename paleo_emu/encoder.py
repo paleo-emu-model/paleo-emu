@@ -12,7 +12,7 @@ from paleo_emu.export import save_training_log
 
 
 # old code, keep it for now
-def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, seed=1024, vae_config=None):
+def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, vae_config=None):
     print(f"[INFO] Raw Y_flat min={np.min(Y_flat)}, max={np.max(Y_flat)}, mean={np.mean(Y_flat)}, std={np.std(Y_flat)}")
     
     mean_val = np.mean(Y_flat)
@@ -69,7 +69,6 @@ def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, se
 
         save_training_log(
             epoch_losses=epoch_losses,
-            seed=seed,
             latent_dim=latent_dim,
             epochs=epochs,
             learning_rate=learning_rate,

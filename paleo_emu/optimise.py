@@ -3,7 +3,7 @@ from paleo_emu.export import save_prediction
 from paleo_emu.training import run_training
 
 
-def full_emulator_experiment(train_dict, emulator_name, output_dir="outputs",seed=None, vae_config=None):
+def full_emulator_experiment(train_dict, emulator_name, output_dir="outputs", vae_config=None):
     """
     全自动尝试所有model+encoder组合，并保存结果。
     """
@@ -33,7 +33,6 @@ def full_emulator_experiment(train_dict, emulator_name, output_dir="outputs",see
                 kernel=kernel if kernel else "RBF_White",  # 给LGBM随便传一个kernel（无效但占位）
                 encoder=encoder,
                 vae_config=vae_config,
-                seed=1024,  # 固定种子
                 return_pred=True
             )
 

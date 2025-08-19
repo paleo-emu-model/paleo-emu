@@ -8,7 +8,7 @@ import os
 
 
 # ===== 模块 2：特征提取模块（PCA / VAE） =====
-def save_training_log(epoch_losses, seed, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
+def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
     """
     保存VAE训练日志，包括：
     - loss曲线图
@@ -19,7 +19,7 @@ def save_training_log(epoch_losses, seed, latent_dim, epochs, learning_rate, bat
     os.makedirs(log_dir, exist_ok=True)
 
     # --- 统一格式化信息 ---
-    info_str = f"seed{seed}_latent{latent_dim}_ep{epochs}_lr{learning_rate}_bs{batch_size}_kl{kl_weight}"
+    info_str = f"latent{latent_dim}_ep{epochs}_lr{learning_rate}_bs{batch_size}_kl{kl_weight}"
 
     # --- 保存loss曲线 ---
     loss_curve_filename = os.path.join(log_dir, f"loss_curve_{info_str}.png")
@@ -41,7 +41,6 @@ def save_training_log(epoch_losses, seed, latent_dim, epochs, learning_rate, bat
     log_file = os.path.join(log_dir, "vae_hyperparameter_log.csv")
 
     log_entry = {
-        "seed": seed,
         "latent_dim": latent_dim,
         "epochs": epochs,
         "learning_rate": learning_rate,

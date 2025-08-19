@@ -23,20 +23,19 @@ from paleo_emu.plotting import plot_r2_map_with_latlon, plot_prediction_maps_wit
 from paleo_emu.validation import compute_r2_map
 
 # separate train and test before PCA
-def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, seed=42,  return_validation=True):
+def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, return_validation=True):
 
     # load data
     X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
 
     # split data for training and testing
-    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2, random_state=seed)
+    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2)
 
     # encode the chosen training Y
     Y_train_encoded, decoder, mean_val, std_val = encode(
         Y_train_flat,
         encoder=encoder,
         pca_variance_ratio=pca_variance_ratio,
-        seed=seed,
         vae_config=vae_config
     )
     latent_dim = Y_train_encoded.shape[1]
@@ -133,7 +132,7 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
         }
 
 # separate train and test before PCA
-def run_training_leave_one_out(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, seed=42,  return_validation=True):
+def run_training_leave_one_out(train_dict, model_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None,  return_validation=True):
 
     # 1. 加载原始数据
     X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
@@ -161,7 +160,6 @@ def run_training_leave_one_out(train_dict, model_type="GPR", kernel="RBF_White",
             Y_train_flat,
             encoder=encoder,
             pca_variance_ratio=pca_variance_ratio,
-            seed=seed,
             vae_config=vae_config
         )
 
