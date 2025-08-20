@@ -109,3 +109,28 @@ def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array,
     plt.savefig(save_path, dpi=300)
     plt.close()
     print(f"[INFO] Map saved to {save_path}")
+
+def plot_histogram_4_leave1out(Y_true, Y_pred, lat_array, lon_array, save_folder="examples/outputs/maps"):
+    """
+    Plot histogram for leave-one-out cross-validation results.
+    """
+    os.makedirs(save_folder, exist_ok=True)
+
+    # Compute errors
+    errors = Y_pred - Y_true
+
+    # Plot histogram
+    plt.figure(figsize=(10, 6))
+    plt.hist(errors.flatten(), bins=50, color='blue', alpha=0.7)
+    plt.title("Leave-One-Out Cross-Validation Errors")
+    plt.xlabel("Error")
+    plt.ylabel("Frequency")
+    plt.grid()
+
+    # Save histogram
+    file_name = f"leave1out_histogram.png"
+    save_path = os.path.join(save_folder, file_name)
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+    print(f"[INFO] Histogram saved to: {save_path}")
