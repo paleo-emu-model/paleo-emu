@@ -116,15 +116,25 @@ def plot_histogram_4_leave1out(Y_true, Y_pred, lat_array, lon_array, save_folder
     """
     os.makedirs(save_folder, exist_ok=True)
 
-    # Compute errors
+    member_n = Y_true.shape[0]
+    # Compute standard deviation for each member
+    std_devs = np.std(Y_pred - Y_true, axis=(1, 2))
     errors = Y_pred - Y_true
+    mem_l1_sd = np.sum(np.abs(errors) <= std_devs[:, np.newaxis, np.newaxis], axis=(1, 2)) / ( Y_true.shape[1] * Y_true.shape[2] )
+    mem_l2_sd = np.sum(np.abs(errors) > std_devs[:, np.newaxis, np.newaxis] & np.abs(errors) <= 2 * std_devs[:, np.newaxis, np.newaxis], axis=(1, 2)) / ( Y_true.shape[1] * Y_true.shape[2] )
+    mem_l3_sd = np.sum(np.abs(errors) > 2 * std_devs[:, np.newaxis, np.newaxis] & np.abs(errors) <= 3 * std_devs[:, np.newaxis, np.newaxis], axis=(1, 2)) / ( Y_true.shape[1] * Y_true.shape[2] )
+    mem_g3_sd = np.sum(np.abs(errors) > 3 * std_devs[:, np.newaxis, np.newaxis], axis=(1, 2)) / ( Y_true.shape[1] * Y_true.shape[2] )
 
-    # Plot histogram
+    # Plot histogram shows member-wise ratios
     plt.figure(figsize=(10, 6))
-    plt.hist(errors.flatten(), bins=50, color='blue', alpha=0.7)
-    plt.title("Leave-One-Out Cross-Validation Errors")
-    plt.xlabel("Error")
-    plt.ylabel("Frequency")
+    plt.bar(np.arange(member_n), mem_l1_sd, label='Within 1 SD', alpha=0.7, color='blue')
+    plt.bar(np.arange(member_n), mem_l2_sd, label='Between 1 and 2 SD', alpha=0.7, color='orange')
+    plt.bar(np.arange(member_n), mem_l3_sd, label='Between 2 and 3 SD', alpha=0.7, color='green')
+    plt.bar(np.arange(member_n), mem_g3_sd, label='Greater than 3 SD', alpha=0.7, color='red')
+    plt.xlabel("Experiment Number")
+    plt.ylabel("Percentage")
+    plt.title("Leave-One-Out Cross-Validation Emulator Performance")
+    plt.legend()
     plt.grid()
 
     # Save histogram

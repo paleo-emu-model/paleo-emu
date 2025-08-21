@@ -44,7 +44,7 @@ from paleo_emu.validation import compute_r2_map
 X_training: (n_samples, 5) the input feature matrix
 Y_training: (n_samples, lat*lon) the flattened output matrix
 """
-def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_variance_ratio=0.999,encoder="PCA",vae_config=None)
+def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_variance_ratio=0.999,encoder="PCA",vae_config=None):
     # encode the chosen training Y
     Y_train_encoded, decoder, mean_val, std_val = encode(
         Y_train,
@@ -62,8 +62,6 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
         ("regressor", MultiOutputRegressor(regressor))
     ])
     pipeline.fit(X_train, Y_train_encoded)
-    # save the scaler
-    joblib.dump(pipeline.named_steps["scaler"], "scaler.joblib")
     # save the trained pipeline
     joblib.dump(pipeline, "pipeline.joblib")
     # save the decoder
@@ -76,8 +74,7 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
         "std_val": std_val,
         "n_components_retained": latent_dim,
         "regressor_type": regressor_type,
-        "kernel": kernel
-    }
+        "kernel": kernel}
 
 def return_validation(X_test,Y_true_flat,trained_pipeline,decoder,mean_val,std_val,spatial_shape,encoder):
     """
