@@ -44,7 +44,7 @@ from paleo_emu.validation import compute_r2_map
 X_training: (n_samples, 5) the input feature matrix
 Y_training: (n_samples, lat*lon) the flattened output matrix
 """
-def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_variance_ratio=0.999,encoder="PCA",vae_config=None):
+def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_variance_ratio=0.999,encoder="PCA",vae_config=None,fixed_hp=True):
     # encode the chosen training Y
     Y_train_encoded, decoder, mean_val, std_val = encode(
         Y_train,
