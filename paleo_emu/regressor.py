@@ -10,7 +10,7 @@ from sklearn.gaussian_process.kernels import (
 )
 from lightgbm import LGBMRegressor
 
-def build_regressor(model_type="GPR", kernel_name="RBF_White", encoder="PCA"):
+def build_regressor(model_type="GPR", kernel_name="RBF_White", encoder="PCA",fixed_hp=False):
     """
     adapt kernel selection based on encoder
     """
@@ -43,8 +43,36 @@ def build_regressor(model_type="GPR", kernel_name="RBF_White", encoder="PCA"):
         if kernel_name not in kernels:
             raise ValueError(f"[ERROR] Kernel '{kernel_name}' not found. Available: {list(kernels.keys())}")
 
-        regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], n_restarts_optimizer=10, random_state=42)
-        #regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], n_restarts_optimizer=5, random_state=42)
+        if fixed_hp:
+            # set fixed hyperparameters
+            """
+            if emu_type == "modlowice":
+                # hyperparameters for the modlowice emulator
+                hp = pd.DataFrame({
+                    'l.co2': [0.523323] * nkeep,
+                    'l.esinw': [2.791735] * nkeep,
+                    'l.ecosw': [1.310285] * nkeep,
+                    'l.obl': [1.663824] * nkeep,
+                    'l.icevol': [10.000000] * nkeep,
+                    'nugget': [0.000000000224038] * nkeep
+                })
+            elif emu_type == "modhighice":
+                # hyperparameters for the modhighice emulator
+                hp = pd.DataFrame({
+                    'l.co2': [1.003084] * nkeep,
+                    'l.esinw': [6.907880] * nkeep,
+                    'l.ecosw': [7.499054] * nkeep,
+                    'l.obl': [5.460205] * nkeep,
+                    'l.icevol': [0.290289] * nkeep,
+                    'nugget': [0.050143] * nkeep
+                })
+                # compute the covariance matrix of X, also known as the kernel matrix
+                R = cov_mat(lambda_, X, X)
+                Rt = R + np.diag(np.full(n, lambda_['nugget'])) # add the nugget term to the diagonal of the kernel matrix
+            """
+            regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], n_restarts_optimizer=10, random_state=42)
+        else:
+            regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], n_restarts_optimizer=5, random_state=42)
 
     elif model_type == "LGBM":
         regressor = LGBMRegressor(
