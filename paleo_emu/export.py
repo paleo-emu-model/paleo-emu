@@ -57,7 +57,7 @@ def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_siz
     print(f"[INFO] Hyperparameter log updated: {log_file}")
 
 
-def save_prediction(Y_pred, output_dir, file_name="prediction"):
+def save_prediction(Y_pred, lat_array, lon_array, output_dir, file_name="prediction"):
     """
     Save the prediction results.
     Parameters:
@@ -68,16 +68,16 @@ def save_prediction(Y_pred, output_dir, file_name="prediction"):
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    
     # Save as netCDF format
-    n_samples, lat, lon = Y_pred.shape
+    n_samples = Y_pred.shape[0]
     da = xr.DataArray(
         data=Y_pred,
-        dims=["sample", "lat", "lon"],
+        dims=["year", "latitude", "longitude"],
         coords={
-            "sample": np.arange(n_samples),
-            "lat": np.arange(lat),
-            "lon": np.arange(lon),
+            "year": np.arange(n_samples),
+            "latitude": np.array(lat_array),
+            "longitude": np.array(lon_array),
         },
         name="prediction"
     )

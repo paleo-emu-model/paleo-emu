@@ -4,7 +4,9 @@ This script is used to run the emulator training pipeline for the Paleo-Emu proj
 
 # from src.optimise import full_emulator_experiment
 import os
-from paleo_emu.training import run_training_28
+from paleo_emu.training import run_training_all
+from paleo_emu.prediction import run_prediction
+# from paleo_emu.load import load_training_data
 
 # define emulator training data
 emulator = "lowmod_ice"
@@ -42,7 +44,10 @@ train_dict = {
         "label": "highlowmod_ice"
     }
 }
+forcing_data = {"file_path": "examples/forcing_data/",
+                "forcing_input": "emul_inputs_RCP85.67.res"}
 
 # run emulator training
-emulator = run_training_28(train_dict[emulator],regressor_type="GPR",kernel="RBF",encoder="PCA", vae_config=vae_config, return_validation=True)
+emulator = run_training_all(train_dict[emulator], regressor_type="GPR", kernel="RBF", encoder="PCA", vae_config=vae_config, fixed_hp=True)
 
+prediction = run_prediction(emulator, forcing_data, output_dir="examples/outputs/prediction/")

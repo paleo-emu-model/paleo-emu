@@ -14,7 +14,7 @@ from paleo_emu.export import save_prediction
 import numpy as np
 import joblib
 
-def run_prediction(emulator, forcing_cfg):
+def run_prediction(emulator, forcing_cfg, output_dir):
     # Check if forcing_cfg is a path to an ASCII data file or a data object
     if isinstance(forcing_cfg, dict):
         # Assume it's a file path
@@ -23,7 +23,7 @@ def run_prediction(emulator, forcing_cfg):
         # If it's already data, use it directly
         X_pred = forcing_cfg
 
-    pipeline = joblib.load(emulator["trained_pipeline"])
+    pipeline = joblib.load(emulator["pipeline_model"])
     decoder = joblib.load(emulator["decoder"])
     Y_pred_encoded = pipeline.predict(X_pred)
     if emulator["encoder"] == "PCA":
@@ -38,7 +38,9 @@ def run_prediction(emulator, forcing_cfg):
     n = Y_full.shape[0]
     lat, lon = emulator["spatial_shape"]
     Y_out = Y_full.reshape(n, lat, lon)
-    save_prediction(Y_out, emulator["output_dir"], file_name=emulator["encoder_used"])
+    lat_array = emulator["lat_array"]
+    lon_array = emulator["lon_array"]
+    save_prediction(Y_out, lat_array, lon_array, output_dir, file_name=f"{emulator['encoder']}_{emulator['regressor_type']}_prediction")
     return Y_out
 
     

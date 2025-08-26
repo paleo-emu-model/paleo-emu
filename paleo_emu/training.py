@@ -55,7 +55,7 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
     latent_dim = Y_train_encoded.shape[1]
 
     # build and train the regressor and pipeline
-    regressor = build_regressor( regressor_type= regressor_type, kernel_name=kernel,encoder=encoder)
+    regressor = build_regressor( regressor_type= regressor_type, kernel_name=kernel,encoder=encoder,fixed_hp=fixed_hp)
 
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
@@ -70,6 +70,7 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
     return {
         "trained_pipeline": "pipeline.joblib",
         "decoder": "decoder.joblib",
+        "encoder": encoder,
         "mean_val": mean_val,
         "std_val": std_val,
         "n_components_retained": latent_dim,
@@ -134,6 +135,25 @@ def return_validation(X_test,Y_true_flat,trained_pipeline,decoder,mean_val,std_v
             "r2_score": r2_score,
             "rmse": rmse}
 
+def run_training_all(train_dict,regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, fixed_hp=True):
+    X_train, Y_train, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
+    training_info = run_training(X_train, Y_train, regressor_type=regressor_type, kernel=kernel, pca_variance_ratio=pca_variance_ratio, encoder=encoder, vae_config=vae_config,fixed_hp=fixed_hp)
+    trained_pipeline, decoder, mean_val, std_val, n_components = training_info["trained_pipeline"], training_info["decoder"], training_info["mean_val"], training_info["std_val"], training_info["n_components_retained"]
+    return {
+        "pipeline_model": trained_pipeline,
+        "decoder": decoder,
+        "encoder": encoder,
+        "regressor_type": regressor_type,
+        "mean_val": mean_val,
+        "std_val": std_val,
+        "n_components_retained": n_components,
+        "original_variable": var_name,
+        "spatial_shape": spatial_shape,
+        "lat_array": lat_array,
+        "lon_array": lon_array
+    }
+
+
 # 20% for validation; 80% for training
 # only sample once
 def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, return_validation=True):
@@ -164,6 +184,7 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
     return {
         "pipeline_model": trained_pipeline,
         "decoder": decoder,
+        "encoder": encoder,
         "r2_score": r2_score,
         "n_components_retained": n_components,
         "original_variable": var_name,
