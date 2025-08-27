@@ -45,14 +45,16 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
 
         if fixed_hp:
             # set fixed hyperparameters
-                nkeep=20
+                nkeep=15.0
                 # if emu_type == "modlowice":
-                hp_values = [0.523323, 2.791735, 1.310285, 1.663824, 10.000000, 0.000000000224038]*nkeep
+                # hp_values = [0.523323, 2.791735, 1.310285, 1.663824, 10.000000, 0.000000000224038]
                 # if emu_type == "modhighice":
-                hp_values = [1.003084, 6.907880, 7.499054, 5.460205, 0.290289, 0.050143]*nkeep
+                hp_values = [1.003084, 6.907880, 7.499054, 5.460205, 0.290289, 0.050143]
+                hp_values = [value * nkeep for value in hp_values]
                 length_scales = hp_values[:-1]  # Extract all but the last value for length scales
                 nugget_value = hp_values[-1]   # The last value is the nugget
-            
+
+                print(f"Length of length_scale: {len(length_scales)}")
                 kernel = RBF(length_scale=length_scales)
                 regressor = GaussianProcessRegressor(
                     kernel=kernel,

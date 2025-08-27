@@ -50,7 +50,8 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
         Y_train,
         encoder=encoder,
         pca_variance_ratio=pca_variance_ratio,
-        vae_config=vae_config
+        vae_config=vae_config,
+        fixed_hp=fixed_hp
     )
     latent_dim = Y_train_encoded.shape[1]
 

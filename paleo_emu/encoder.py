@@ -12,7 +12,7 @@ from paleo_emu.export import save_training_log
 
 
 # old code, keep it for now
-def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, vae_config=None):
+def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, vae_config=None,fixed_hp=False):
     print(f"[INFO] Raw Y_flat min={np.min(Y_flat)}, max={np.max(Y_flat)}, mean={np.mean(Y_flat)}, std={np.std(Y_flat)}")
     
     mean_val = np.mean(Y_flat)
@@ -21,12 +21,18 @@ def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, va
     print(f"[INFO] Y_flat standardized to mean ~0, std ~1")
 
     if encoder == "PCA":
-        print("[INFO] Using PCA for feature extraction.")
-        pca_model = PCA(n_components=pca_variance_ratio)
-        Y_pca = pca_model.fit_transform(Y_flat)
-
-        print(f"PCA n_components_: {pca_model.n_components_}")
-        print(f"Sum explained variance: {np.sum(pca_model.explained_variance_ratio_)}")
+        if fixed_hp:
+            pca_model = PCA(n_components=15)
+            Y_pca = pca_model.fit_transform(Y_flat)
+            print("[INFO] Using fixed prescribed hyper parameters. ")
+            print(f"[INFO] PCA n_components_: {pca_model.n_components_}")
+            print(f"[INFO] Sum explained variance: {np.sum(pca_model.explained_variance_ratio_)}")
+        else:
+            print("[INFO] Using PCA for feature extraction.")
+            pca_model = PCA(n_components=pca_variance_ratio)
+            Y_pca = pca_model.fit_transform(Y_flat)
+            print(f"[INFO] PCA n_components_: {pca_model.n_components_}")
+            print(f"[INFO] Sum explained variance: {np.sum(pca_model.explained_variance_ratio_)}")
 
     elif encoder == "VAE":
         print("[INFO] Using VAE for feature extraction.")

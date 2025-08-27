@@ -140,5 +140,5 @@ def preprocess_data(cfg):
 
 # CLI / test interface
 if __name__ == "__main__":
-    from examples.config.training_dict_raw import dict_raw
-    preprocess_data(dict_raw["highlowmod_ice"])
+    from config.training_dict_raw import dict_raw
+    preprocess_data(dict_raw["highmod_ice"])

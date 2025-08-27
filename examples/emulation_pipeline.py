@@ -9,7 +9,7 @@ from paleo_emu.prediction import run_prediction
 # from paleo_emu.load import load_training_data
 
 # define emulator training data
-emulator = "lowmod_ice"
+emulator = "highmod_ice"
 forcing = "rcp85.1"
 
 # define VAE configuration
