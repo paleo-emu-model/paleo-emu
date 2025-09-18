@@ -7,3 +7,5 @@ training/plots
 __pycache__/
 .vscode/
 *.h5
+examples/outputs/*.nc
+to_be_moved/
