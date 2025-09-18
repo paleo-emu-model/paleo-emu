@@ -32,7 +32,7 @@ from sklearn.metrics import r2_score
 from sklearn.metrics import root_mean_squared_error
 import joblib
 
-from docs.source.auto_examples.plot_pipeline import X_test
+#from docs.source.auto_examples.plot_pipeline import X_test
 from paleo_emu.load import load_training_data
 from paleo_emu.encoder import encode
 from paleo_emu.regressor import build_regressor

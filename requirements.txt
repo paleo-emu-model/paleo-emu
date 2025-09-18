@@ -8,3 +8,5 @@ xarray
 pydata_sphinx_theme
 pillow
 tensorflow
+lightgbm
+cartopy
