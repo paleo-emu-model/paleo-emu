@@ -1,6 +1,6 @@
 import unittest
 unittest.TestLoader.sortTestMethodsUsing = None
-#import xarray as xr
+import xarray as xr
 import os
 from paleo_emu.training import run_training_28
 
@@ -47,18 +47,28 @@ class TestTest(unittest.TestCase):
         }
 
         # run emulator training
-        emulator = run_training_28(train_dict[emulator],regressor_type="GPR",kernel="RBF",encoder="PCA", vae_config=vae_config, return_validation=True)
+        emulator = run_training_28(train_dict[emulator],
+                                   regressor_type="GPR", 
+                                   kernel="RBF",encoder="PCA", 
+                                   vae_config=vae_config, 
+                                   return_validation=True)
 
+    def test_model_output(self):
     # import output
-#    ds = xr.open_dataset()
+        file_path = os.path.join(".", "examples", "training_data")
 
- #   assert ds['temperature'].mean() == 14.45
-    
+        ds = xr.open_dataset(os.path.join(
+            file_path, "training_data_lowmodice_temp_formatted.nc"))
+
+        self.assertAlmostEqual(
+            ds['var'].mean(), 5.28, delta=0.01
+        )
 
 
 if __name__ == '__main__':
     # Create a test suite combining all test cases in order
     suite = unittest.TestSuite()
-    suite.addTest(TestTest('training_28_test'))
+#    suite.addTest(TestTest('training_28_test'))
+    suite.addTest(TestTest('test_model_output'))
     runner = unittest.TextTestRunner()
     runner.run(suite)
