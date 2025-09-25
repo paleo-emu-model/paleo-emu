@@ -43,28 +43,48 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
         if kernel_name not in kernels:
             raise ValueError(f"[ERROR] Kernel '{kernel_name}' not found. Available: {list(kernels.keys())}")
 
-        if fixed_hp:
-            # set fixed hyperparameters
-                nkeep=15.0
-                # if emu_type == "modlowice":
-                # hp_values = [0.523323, 2.791735, 1.310285, 1.663824, 10.000000, 0.000000000224038]
-                # if emu_type == "modhighice":
-                hp_values = [1.003084, 6.907880, 7.499054, 5.460205, 0.290289, 0.050143]
-                hp_values = [value * nkeep for value in hp_values]
-                length_scales = hp_values[:-1]  # Extract all but the last value for length scales
-                nugget_value = hp_values[-1]   # The last value is the nugget
-
-                print(f"Length of length_scale: {len(length_scales)}")
-                kernel = RBF(length_scale=length_scales)
-                regressor = GaussianProcessRegressor(
-                    kernel=kernel,
-                    alpha=nugget_value,  # 使用 alpha 参数设置 nugget
-                    optimizer=None,      # 关闭优化器
-                    normalize_y=False,
-                    copy_X_train=True
-                )
-        else:
+        if fixed_hp == "False":
             regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], n_restarts_optimizer=5, random_state=42)
+        elif fixed_hp:
+            # set fixed hyperparameters
+            nkeep=15.0
+            # if emu_type == "modlowice":
+            # hp_values = [0.523323, 2.791735, 1.310285, 1.663824, 10.000000, 0.000000000224038]
+            # if emu_type == "modhighice":
+            # hp_values = [1.003084, 6.907880, 7.499054, 5.460205, 0.290289, 0.050143]
+            # if emu_type == "modhighlowice":
+            hp_values = [1.02978659, 1.28309734, 0.44338942, 2.71906639, 0.84986604, 0.10781086297849862]
+            hp_values = [value * nkeep for value in hp_values]
+            length_scales = hp_values[:-1]  # Extract all but the last value for length scales
+            nugget_value = hp_values[-1]   # The last value is the nugget
+
+            print(f"Length of length_scale: {len(length_scales)}")
+            kernel = RBF(length_scale=length_scales)
+            regressor = GaussianProcessRegressor(
+                kernel=kernel,
+                alpha=nugget_value,  # 使用 alpha 参数设置 nugget
+                optimizer=None,      # 关闭优化器
+                normalize_y=False,
+                copy_X_train=True
+            )
+        else:
+            ##wait to be added
+            # read in the fixed_hp file and load the hp used
+            nkeep = nkeep 
+            hp_values = []
+            hp_values = [value * nkeep for value in hp_values]
+            length_scales = hp_values[:-1]  # Extract all but the last value for length scales
+            nugget_value = hp_values[-1]   # The last value is the nugget
+
+            print(f"Length of length_scale: {len(length_scales)}")
+            kernel = RBF(length_scale=length_scales)
+            regressor = GaussianProcessRegressor(
+                kernel=kernel,
+                alpha=nugget_value,  # 使用 alpha 参数设置 nugget
+                optimizer=None,      # 关闭优化器
+                normalize_y=False,
+                copy_X_train=True
+            )
 
     elif regressor_type == "LGBM":
         regressor = LGBMRegressor(

@@ -55,6 +55,15 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
     )
     latent_dim = Y_train_encoded.shape[1]
 
+    # # ------ to be deleted-------
+    # # Save Y_train_encoded as a NetCDF file
+    # output_dir = "examples/outputs/"
+    # os.makedirs(output_dir, exist_ok=True)
+    # output_path = os.path.join(output_dir, "Y_train_encoded.nc")
+    # xr.DataArray(Y_train_encoded).to_netcdf(output_path)
+    # print(f"[INFO] Y_train_encoded saved to {output_path} [TO BE DELETED]")
+    # # --- to be deleted------------------
+
     # build and train the regressor and pipeline
     regressor = build_regressor( regressor_type= regressor_type, kernel_name=kernel,encoder=encoder,fixed_hp=fixed_hp)
 

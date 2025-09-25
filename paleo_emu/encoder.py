@@ -9,6 +9,7 @@ from sklearn.decomposition import PCA
 
 from paleo_emu.vae import VAE, compute_vae_loss
 from paleo_emu.export import save_training_log
+import xarray as xr
 
 
 # old code, keep it for now
@@ -22,17 +23,41 @@ def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, va
 
     if encoder == "PCA":
         if fixed_hp:
-            pca_model = PCA(n_components=15)
-            Y_pca = pca_model.fit_transform(Y_flat)
             print("[INFO] Using fixed prescribed hyper parameters. ")
-            print(f"[INFO] PCA n_components_: {pca_model.n_components_}")
-            print(f"[INFO] Sum explained variance: {np.sum(pca_model.explained_variance_ratio_)}")
-        else:
+            n_samples = Y_flat.shape[0]
+            pca_model = PCA(n_components=20)
+        elif fixed_hp == "False":
             print("[INFO] Using PCA for feature extraction.")
             pca_model = PCA(n_components=pca_variance_ratio)
-            Y_pca = pca_model.fit_transform(Y_flat)
-            print(f"[INFO] PCA n_components_: {pca_model.n_components_}")
-            print(f"[INFO] Sum explained variance: {np.sum(pca_model.explained_variance_ratio_)}")
+        else:
+            print("[INFO] using user defined hyperparameter")
+            #---
+            #wait to be added
+            #read in the file contains hp and nkeep
+            pca_model = PCA(n_components=nkeep)
+        
+        Y_pca = pca_model.fit_transform(Y_flat)
+        print(f"[INFO] PCA n_components_: {pca_model.n_components_}")
+        print(f"[INFO] Sum explained variance: {np.sum(pca_model.explained_variance_ratio_)}")
+        # # --------temporary test---- to be deleted
+        # # Save PCA results as NetCDF
+        # output_path = "examples/outputs/test.PCA.nc"
+        # scaled_amps = pca_model.components_.T * pca_model.singular_values_
+        # ds = xr.Dataset(
+        #     {
+        #         "Y_pca": (["samples", "components"], Y_pca),
+        #         "pca_mean": (["features"], pca_model.mean_),
+        #         "pca_scaled_amps": (["features", "components"], scaled_amps),
+        #     },
+        #     coords={
+        #         "samples": np.arange(Y_pca.shape[0]),
+        #         "components": np.arange(Y_pca.shape[1]),
+        #         "features": np.arange(pca_model.mean_.shape[0]),
+        #     },
+        # )
+        # ds.to_netcdf(output_path)
+        # print(f"[INFO] PCA results saved to {output_path}")
+        # # --------temporary test---- to be deleted
 
     elif encoder == "VAE":
         print("[INFO] Using VAE for feature extraction.")
