@@ -87,7 +87,7 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
         "regressor_type": regressor_type,
         "kernel": kernel}
 
-def return_validation(X_test,Y_true_flat,trained_pipeline,decoder,mean_val,std_val,spatial_shape,encoder):
+def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_val,std_val,spatial_shape,encoder):
     """
         1. encode, decode Y_test
         2. predict Y_test_predicted using trained_pipeline
@@ -136,13 +136,12 @@ def return_validation(X_test,Y_true_flat,trained_pipeline,decoder,mean_val,std_v
     n = Y_pred_full.shape[0]
     lat, lon = spatial_shape
     Y_pred_out = Y_pred_full.reshape(n, lat, lon)
-    Y_true_out = Y_true_full.reshape(n, lat, lon)
-    r2_score = r2_score(Y_true_full, Y_pred_full)
+    Y_true_out = Y_true_full.reshape(n, lat, lon) 
     rmse = root_mean_squared_error(Y_true_full, Y_pred_full)
 
     return {"Y_pred_out": Y_pred_out,
             "Y_true_out": Y_true_out,
-            "r2_score": r2_score,
+            "r2_score": r2_score(Y_true_full, Y_pred_full),
             "rmse": rmse}
 
 def run_training_all(train_dict,regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, fixed_hp=True):
@@ -179,7 +178,7 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
 
     if return_validation:
         # compute validation metrics
-        validation_metrics = return_validation(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
+        validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
         Y_pred_out, Y_true_out, r2_score = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["r2_score"]
         # plotting for validation
         r2_map = compute_r2_map(Y_true_out, Y_pred_out, lat_array, lon_array)
@@ -239,7 +238,7 @@ def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_Whi
         trained_pipeline = joblib.load(trained_pipeline)
         decoder = joblib.load(decoder)
         
-        validation_metrics = return_validation(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
+        validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
         Y_pred_out, Y_true_out, rmse, spatial_shape = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["rmse"], validation_metrics["spatial_shape"]
 
         Y_pred_full.extend(Y_pred_out)
