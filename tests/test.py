@@ -68,7 +68,7 @@ class TestTest(unittest.TestCase):
 if __name__ == '__main__':
     # Create a test suite combining all test cases in order
     suite = unittest.TestSuite()
-#    suite.addTest(TestTest('training_28_test'))
+    suite.addTest(TestTest('training_28_test'))
     suite.addTest(TestTest('test_model_output'))
     runner = unittest.TextTestRunner()
     runner.run(suite)
