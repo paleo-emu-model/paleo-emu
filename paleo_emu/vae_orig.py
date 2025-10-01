@@ -3,7 +3,7 @@ from tensorflow.keras import layers, models
 import keras
 
 @keras.saving.register_keras_serializable()
-class VAE(keras.Model):
+class VAE(tf.keras.Model):
     def __init__(self, input_dim, latent_dim):
         super(VAE, self).__init__()
         self.latent_dim = latent_dim
@@ -13,7 +13,7 @@ class VAE(keras.Model):
             layers.Dense(4096, activation="relu"),           # 7008 → 4096
             layers.Dense(2048, activation="relu"),           # 4096 → 2048
             layers.Dense(4096, activation="relu"),           # 2048 → 4096
-            layers.Dense(latent_dim * 2)                     # gives mean and logvar
+            layers.Dense(latent_dim * 2)                           # gives mean and logvar
         ])
         # decoder
         self.decoder = models.Sequential([
@@ -24,22 +24,8 @@ class VAE(keras.Model):
             layers.Dense(1024, activation="relu"),
             layers.Dense(7008)
         ])
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            'latent_dim': self.latent_dim,
-            # Add other constructor parameters that your VAE actually uses
-            # Remove 'input_dim' since it doesn't exist as an attribute
-        })
-        return config
-    
-    @classmethod
-    def from_config(cls, config):
-        # Filter out Keras-specific parameters that aren't VAE constructor arguments
-        vae_config = {k: v for k, v in config.items()
-                      if k in ['latent_dim']}  # Add your actual constructor params
-        return cls(**vae_config)
-    
+
+
     def reparameterize(self, mean, logvar):
         batch = tf.shape(mean)[0]
         dim = tf.shape(mean)[1]

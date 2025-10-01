@@ -76,7 +76,7 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
     joblib.dump(pipeline, "pipeline.joblib")
     # save the decoder
     joblib.dump(decoder, "decoder.joblib")
-
+    
     return {
         "trained_pipeline": "pipeline.joblib",
         "decoder": "decoder.joblib",

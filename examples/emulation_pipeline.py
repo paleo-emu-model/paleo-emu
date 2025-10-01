@@ -48,7 +48,7 @@ forcing_data = {"file_path": "examples/forcing_data/",
                 "forcing_input": "emul_inputs_RCP85.67.res"}
 
 # run emulator training
-emulator = run_training_all(train_dict[emulator], regressor_type="GPR", kernel="RBF", encoder="PCA", vae_config=vae_config, fixed_hp=True)
+emulator = run_training_all(train_dict[emulator], regressor_type="GPR", kernel="RBF", encoder="VAE", vae_config=vae_config, fixed_hp=True)
 
 prediction = run_prediction(emulator, forcing_data, output_dir="examples/outputs/prediction/")
 
