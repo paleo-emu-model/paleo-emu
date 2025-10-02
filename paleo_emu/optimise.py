@@ -144,3 +144,6 @@ def optimize_hyperparameters(train_dict):
     print(f"[INFO] Optimized signal variance: {optimal_signal_variance}")
 
     return optimal_weights, optimal_nugget, optimal_signal_variance
+
+# add grids search CV for LGBMRegressor
+# https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.L

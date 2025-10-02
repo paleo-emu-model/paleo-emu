@@ -45,7 +45,7 @@ train_dict = {
     }
 }
 forcing_data = {"file_path": "examples/forcing_data/",
-                "forcing_input": "emul_inputs_RCP85.67.res"}
+                "forcing_input": "Paleo_forcings_2Ma_xin.res"}
 
 # run emulator training
 emulator = run_training_all(train_dict=train_dict[emulator],

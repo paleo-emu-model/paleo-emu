@@ -92,12 +92,16 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
             learning_rate=0.05,       # reasonable step size
             num_leaves=10,            # very small number of leaves to avoid overfitting
             max_depth=3,              # limit tree depth
+            min_split_gain=0.01,      # Added - require positive gain
+            min_child_samples=50,     # Added - more samples per leaf
+            min_child_weight=0.01,    # Added - minimum weight per leaf
             subsample=0.7,            # row sampling
             colsample_bytree=0.8,     # column sampling
             reg_alpha=0.1,            # L1 regularization
             reg_lambda=1.0,           # L2 regularization
             random_state=42,
-            n_jobs=-1
+            n_jobs=-1,
+            verbosity=-1
         )
     else:
         raise ValueError("[ERROR] regressor_type must be either 'GPR' or 'LGBM'.")
