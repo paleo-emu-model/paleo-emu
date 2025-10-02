@@ -7,6 +7,7 @@ class VAE(keras.Model):
     def __init__(self, input_dim, latent_dim):
         super(VAE, self).__init__()
         self.latent_dim = latent_dim
+        self.input_dim = input_dim
         # encoder
         self.encoder = models.Sequential([
             layers.InputLayer(input_shape=(input_dim,)),    # input_dim=7008
@@ -27,9 +28,8 @@ class VAE(keras.Model):
     def get_config(self):
         config = super().get_config()
         config.update({
+            'input_dim': self.input_dim,
             'latent_dim': self.latent_dim,
-            # Add other constructor parameters that your VAE actually uses
-            # Remove 'input_dim' since it doesn't exist as an attribute
         })
         return config
     
@@ -37,7 +37,7 @@ class VAE(keras.Model):
     def from_config(cls, config):
         # Filter out Keras-specific parameters that aren't VAE constructor arguments
         vae_config = {k: v for k, v in config.items()
-                      if k in ['latent_dim']}  # Add your actual constructor params
+                      if k in ['input_dim', 'latent_dim']}  # Add your actual constructor params
         return cls(**vae_config)
     
     def reparameterize(self, mean, logvar):
