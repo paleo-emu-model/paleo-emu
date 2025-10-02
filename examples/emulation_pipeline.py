@@ -48,9 +48,11 @@ forcing_data = {"file_path": "examples/forcing_data/",
                 "forcing_input": "emul_inputs_RCP85.67.res"}
 
 # run emulator training
-emulator = run_training_all(train_dict[emulator], regressor_type="GPR", kernel="RBF", encoder="VAE", vae_config=vae_config, fixed_hp=True)
+emulator = run_training_all(train_dict=train_dict[emulator],
+                            regressor_type="GPR", kernel="RBF", encoder="PCA", vae_config=vae_config, fixed_hp=True)
 
-prediction = run_prediction(emulator, forcing_data, output_dir="examples/outputs/prediction/")
+
+prediction = run_prediction(emulator=emulator, forcing_cfg=forcing_data, output_dir="examples/outputs/prediction/")
 
 # from paleo_emu.optimise import optimize_hyperparameters
 # hp_optimisation = optimize_hyperparameters(train_dict["highlowmod_ice"])
