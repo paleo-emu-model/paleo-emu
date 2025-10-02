@@ -6,7 +6,7 @@ from sphinx_gallery.sorting import FileNameSortKey  # Correct import
 
 # Project information
 project = 'paleo-emu'
-
+release =  '2025.09.25'
 # Theme
 html_theme = 'pydata_sphinx_theme'
 

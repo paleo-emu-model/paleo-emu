@@ -51,6 +51,7 @@ forcing_data = {"file_path": "examples/forcing_data/",
 emulator = run_training_all(train_dict=train_dict[emulator],
                             regressor_type="GPR", kernel="RBF", encoder="PCA", vae_config=vae_config, fixed_hp=True)
 
+
 prediction = run_prediction(emulator=emulator, forcing_cfg=forcing_data, output_dir="examples/outputs/prediction/")
 
 # from paleo_emu.optimise import optimize_hyperparameters
