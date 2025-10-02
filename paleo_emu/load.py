@@ -39,7 +39,7 @@ def load_training_data(cfg):
     # read X
     df = pd.read_csv(x_path, sep=r"\s+", header=None)
     df.columns = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
-    X = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']].to_numpy()
+    X = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']] #.to_numpy()
 
     # read Y
     ds = xr.open_dataset(y_path)
@@ -67,5 +67,5 @@ def load_forcing_data(forcing_cfg):
     forcing_path = Path(forcing_cfg["file_path"]) / forcing_cfg["forcing_input"]
     df = pd.read_csv(forcing_path, sep=r"\s+", skiprows=1, header=None)
     df.columns = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
-    X_pred = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']].to_numpy()
+    X_pred = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']] #.to_numpy()
     return X_pred
