@@ -110,7 +110,7 @@ def plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array, lon_array,
     plt.close()
     print(f"[INFO] Map saved to {save_path}")
 
-def plot_histogram_4_leave1out(Y_true, Y_pred, lat_array, lon_array, save_folder="examples/outputs/maps"):
+def plot_histogram_4_leave1out(Y_true, Y_pred, save_folder="examples/outputs/maps"):
     """
     Plot histogram for leave-one-out cross-validation results.
     """

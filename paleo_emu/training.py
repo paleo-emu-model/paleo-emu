@@ -225,10 +225,10 @@ def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_Whi
         # ----------
         test_indices = np.arange(i, min(i + batch_size, n_samples))
         train_indices = np.setdiff1d(np.arange(n_samples), test_indices)
-
-        X_train = X[train_indices]
+        
+        X_train = X.iloc[train_indices]
         Y_train_flat = Y_flat[train_indices]
-        X_test = X[test_indices]
+        X_test = X.iloc[test_indices]
         Y_test_flat = Y_flat[test_indices]
 
         # fit model
@@ -239,11 +239,11 @@ def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_Whi
         decoder = joblib.load(decoder)
         
         validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
-        Y_pred_out, Y_true_out, rmse, spatial_shape = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["rmse"], validation_metrics["spatial_shape"]
+        Y_pred_out, Y_true_out, rmse = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["rmse"]
 
         Y_pred_full.extend(Y_pred_out)
         Y_true_full.extend(Y_true_out)
-        rmse_full.extend(rmse)
+        rmse_full.append(rmse)
 
         time_spt = time.time() - time_start
         print(f"[TIME] {min(i + batch_size, n_samples)}/{n_samples} completed in {time_spt:.2f} seconds.")
@@ -254,11 +254,23 @@ def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_Whi
     rmse_full = np.array(rmse_full)
 
     n = Y_pred_full.shape[0]
-    Y_pred_out_full = Y_pred_full.reshape(n, lat, lon)
-    Y_true_out_full = Y_true_full.reshape(n, lat, lon)
+    Y_pred_out_full = Y_pred_full.reshape(n, lat.shape[0], lon.shape[0])
+    Y_true_out_full = Y_true_full.reshape(n, lat.shape[0], lon.shape[0])
+
+    # Save Y_pred_out_full and Y_true_out_full as NetCDF files
+    output_dir = "example/outputs/leave_one_out/"
+    os.makedirs(output_dir, exist_ok=True)
+    y_pred_path = os.path.join(output_dir, "Y_pred_out_full.nc")
+    y_true_path = os.path.join(output_dir, "Y_true_out_full.nc")
+
+    xr.DataArray(Y_pred_out_full, dims=["time", "lat", "lon"]).to_netcdf(y_pred_path)
+    xr.DataArray(Y_true_out_full, dims=["time", "lat", "lon"]).to_netcdf(y_true_path)
+
+    print(f"[INFO] Y_pred_out_full saved to {y_pred_path}")
+    print(f"[INFO] Y_true_out_full saved to {y_true_path}")
 
     # plot
-    plot_histogram_4_leave1out(Y_true_out_full, Y_pred_out_full, lat, lon, save_folder="outputs/maps")
+    plot_histogram_4_leave1out(Y_true_out_full, Y_pred_out_full, lat, lon)
 
     time_spt = time.time() - time_start
     print(f"[TIME] plot completed in {time_spt:.2f} seconds.")
@@ -272,4 +284,46 @@ def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_Whi
         "Y_true_out": Y_true_out_full,
         "encoder_used": encoder,
         "regressor_type": regressor_type
+    }
+
+# 10 fold cross-validation
+# 10% for validation; 90% for training
+def run_training_10fold(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, return_validation=True):
+    # load data
+    X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
+    # split data for training and testing
+    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2)
+    # train model
+    training_info = run_training(X_train, Y_train_flat, regressor_type=regressor_type, kernel=kernel, pca_variance_ratio=pca_variance_ratio, encoder=encoder, vae_config=vae_config)
+    trained_pipeline, decoder, mean_val, std_val, n_components = training_info["trained_pipeline"], training_info["decoder"], training_info["mean_val"], training_info["std_val"], training_info["n_components_retained"]
+    trained_pipeline = joblib.load(trained_pipeline)
+    decoder = joblib.load(decoder)
+
+    if return_validation:
+        # compute validation metrics
+        validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
+        Y_pred_out, Y_true_out, r2_score = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["r2_score"]
+        # plotting for validation
+        r2_map = compute_r2_map(Y_true_out, Y_pred_out, lat_array, lon_array)
+        plot_r2_map_with_latlon(r2_map, lat_array=lat_array, lon_array=lon_array,  regressor_type= regressor_type,
+                                encoder=encoder, kernel=kernel, save_dir="outputs/logs")
+        print(f"[INFO] R² Score: {r2_score:.4f}")
+        print("[INFO] here we picked timesteps 0 1 2 3 999 for demonstration, edit the code if you want to see other timesteps")
+        for timestep in [0, 1, 2, 3, 999]:
+            plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array=lat_array, lon_array=lon_array, timestep=timestep, emulator_name= regressor_type,
+                encoder_name=encoder, kernel_name=kernel, save_folder="outputs/maps", title_suffix=f"Timestep {timestep}")
+
+    return {
+        "pipeline_model": trained_pipeline,
+        "decoder": decoder,
+        "encoder": encoder,
+        "r2_score": r2_score,
+        "n_components_retained": n_components,
+        "original_variable": var_name,
+        "spatial_shape": spatial_shape,
+        "Y_pred_out": Y_pred_out,
+        "Y_true_out": Y_true_out,
+        "X_test": X_test,
+        "encoder_used": encoder,
+        "regressor_type":  regressor_type
     }
