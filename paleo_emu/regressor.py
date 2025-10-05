@@ -44,9 +44,10 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
             raise ValueError(f"[ERROR] Kernel '{kernel_name}' not found. Available: {list(kernels.keys())}")
 
         if fixed_hp == False:
-            regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], alpha=0.0, n_restarts_optimizer=3, random_state=42,normalize_y=True)
+            n_restarts_optimizer = 3
+            regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], alpha=0.0, n_restarts_optimizer=n_restarts_optimizer, random_state=42,normalize_y=True)
             if verbose:
-                print(f"[GPR] init kernel={regressor.kernel} | restarts=5")
+                print(f"[GPR] init kernel={regressor.kernel} | restarts={n_restarts_optimizer}")
         elif fixed_hp:
             # set fixed hyperparameters
             nkeep=15.0
