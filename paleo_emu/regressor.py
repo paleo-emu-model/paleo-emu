@@ -10,7 +10,7 @@ from sklearn.gaussian_process.kernels import (
 )
 from lightgbm import LGBMRegressor
 
-def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA",fixed_hp=False):
+def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA",fixed_hp=False,verbose=True):
     """
     adapt kernel selection based on encoder
     """
@@ -21,7 +21,7 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
                 "Matern_1.5": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=1.5, length_scale_bounds=(1e-2, 1e3)),
                 "Matern_0.5_White": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=0.5, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1e-2, noise_level_bounds=(1e-5, 1)),
                 "RationalQuadratic": C(1.0, (1e-3, 1e3)) * RationalQuadratic(length_scale=1.0, alpha=1.0, length_scale_bounds=(1e-2, 1e3), alpha_bounds=(1e-2, 1e3)),
-                "RBF_White": C(1.0, (1e-3, 1e3)) * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1e-2, noise_level_bounds=(1e-5, 1)),
+                "RBF_White": C(1.0, (1e-3, 1e6)) * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1e-2, noise_level_bounds=(1e-7, 10)),
                 "Matern_2.5_White": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=2.5, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1e-2, noise_level_bounds=(1e-5, 1)),
             }
         elif encoder == "VAE":
@@ -43,8 +43,10 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
         if kernel_name not in kernels:
             raise ValueError(f"[ERROR] Kernel '{kernel_name}' not found. Available: {list(kernels.keys())}")
 
-        if fixed_hp == "False":
-            regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], n_restarts_optimizer=5, random_state=42)
+        if fixed_hp == False:
+            regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], alpha=0.0, n_restarts_optimizer=3, random_state=42,normalize_y=True)
+            if verbose:
+                print(f"[GPR] init kernel={regressor.kernel} | restarts=5")
         elif fixed_hp:
             # set fixed hyperparameters
             nkeep=15.0
@@ -70,7 +72,7 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
         else:
             ##wait to be added
             # read in the fixed_hp file and load the hp used
-            nkeep = nkeep 
+            nkeep = fixed_hp 
             hp_values = []
             hp_values = [value * nkeep for value in hp_values]
             length_scales = hp_values[:-1]  # Extract all but the last value for length scales
