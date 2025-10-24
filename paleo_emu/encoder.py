@@ -1,8 +1,54 @@
+import os
 import numpy as np
 import tensorflow as tf
+import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from paleo_emu.vae import VAE, compute_vae_loss
-from paleo_emu.export import save_training_log
+
+def _save_vae_log(epoch_losses, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
+
+    os.makedirs(log_dir, exist_ok=True)
+
+    info_str = f"latent{latent_dim}_ep{epochs}_lr{learning_rate}_bs{batch_size}_kl{kl_weight}"
+
+    loss_curve_filename = os.path.join(log_dir, f"loss_curve_{info_str}.png")
+
+    plt.figure(figsize=(8,5))
+    plt.plot(range(1, len(epoch_losses)+1), epoch_losses, label="Training Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title(f"VAE Loss Curve ({info_str})")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(loss_curve_filename, dpi=300)
+    plt.close()
+
+    print(f"[INFO] Loss curve saved to: {loss_curve_filename}")
+
+    # --- save hyperparameters and final loss to CSV ---
+    log_file = os.path.join(log_dir, "vae_hyperparameter_log.csv")
+
+    log_entry = {
+        "latent_dim": latent_dim,
+        "epochs": epochs,
+        "learning_rate": learning_rate,
+        "batch_size": batch_size,
+        "kl_weight": kl_weight,
+        "final_loss": epoch_losses[-1]  # the loss of the final epoch
+    }
+
+    if not os.path.exists(log_file):
+        df = pd.DataFrame([log_entry])
+        df.to_csv(log_file, index=False)
+    else:
+        df = pd.read_csv(log_file)
+        df = pd.concat([df, pd.DataFrame([log_entry])], ignore_index=True)
+        df.to_csv(log_file, index=False)
+
+    print(f"[INFO] Hyperparameter log updated: {log_file}")
+
 
 class EncoderGenerator:
     """Utility for building PCA or VAE encoders from data.
@@ -101,7 +147,7 @@ class EncoderGenerator:
             if epoch % 10 == 0 or epoch == epochs-1:
                 print(f"[VAE] Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}")
 
-        save_training_log(
+        _save_vae_log(
             epoch_losses=epoch_losses,
             latent_dim=latent_dim,
             epochs=epochs,
