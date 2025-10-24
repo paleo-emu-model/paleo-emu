@@ -1,4 +1,3 @@
-import argparse
 import numpy as np
 import tensorflow as tf
 from sklearn.decomposition import PCA
@@ -13,13 +12,17 @@ class EncoderGenerator:
     Y : array-like, shape (n_samples, n_features)
         Input data to be encoded.
     model_config : object
-        Configuration object exposing `.pca` and `.vae` dicts. Example:
+        Configuration file with encoder parameters.
+        Example:
 
             model_config = type('C', (), {
-                'pca': {'n_components': 10},
-                'vae': {'latent_dim': 64}
+                'encoder': {'encoder_type': pca, 'n_components': 10},
             })()
 
+            model_config = type('C', (), {
+                'encoder': {'encoder_type': vae, 'epochs': 10},
+            })()
+            
     Attributes
     ----------
     mean_val : float
