@@ -2,15 +2,10 @@
 This module is used to encode (i.e., reduce dimensionality) data using PCA or VAE.
 """
 import numpy as np
-
 import tensorflow as tf
-
 from sklearn.decomposition import PCA
-
 from paleo_emu.vae import VAE, compute_vae_loss
 from paleo_emu.export import save_training_log
-import xarray as xr
-
 
 # old code, keep it for now
 def encode(Y_flat, encoder="PCA", model_type="GPR", pca_variance_ratio=0.999, vae_config=None,fixed_hp=False):
