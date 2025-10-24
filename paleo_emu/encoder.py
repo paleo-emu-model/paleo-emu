@@ -4,7 +4,12 @@ import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from paleo_emu.vae import VAE, compute_vae_loss
+from paleo_emu.vae import VAE
+
+def _compute_vae_loss(x, x_decoded, mean, logvar):
+    reconstruction_loss = tf.reduce_mean(tf.square(x - x_decoded))
+    kl_loss = -0.5 * tf.reduce_mean(1 + logvar - tf.square(mean) - tf.exp(logvar))
+    return reconstruction_loss + kl_loss
 
 def _save_vae_log(epoch_losses, latent_dim, epochs, learning_rate, batch_size, kl_weight, log_dir="training/logs"):
 
@@ -135,7 +140,7 @@ class EncoderGenerator:
             for step, x_batch in enumerate(dataset):
                 with tf.GradientTape() as tape:
                     x_decoded, mean, logvar = vae_model(x_batch)
-                    loss = compute_vae_loss(x_batch, x_decoded, mean, logvar) * kl_weight  # save it for β-VAE if needed
+                    loss = _compute_vae_loss(x_batch, x_decoded, mean, logvar) * kl_weight  # save it for β-VAE if needed
 
                 grads = tape.gradient(loss, vae_model.trainable_variables)
                 optimizer.apply_gradients(zip(grads, vae_model.trainable_variables))

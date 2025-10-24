@@ -52,8 +52,3 @@ class VAE(keras.Model):
         z = self.reparameterize(mean, logvar)
         x_decoded = self.decoder(z)
         return x_decoded, mean, logvar
-
-def compute_vae_loss(x, x_decoded, mean, logvar):
-    reconstruction_loss = tf.reduce_mean(tf.square(x - x_decoded))
-    kl_loss = -0.5 * tf.reduce_mean(1 + logvar - tf.square(mean) - tf.exp(logvar))
-    return reconstruction_loss + kl_loss
