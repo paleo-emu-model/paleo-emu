@@ -145,5 +145,4 @@ def optimize_hyperparameters(train_dict):
 
     return optimal_weights, optimal_nugget, optimal_signal_variance
 
-# add grids search CV for LGBMRegressor
-# https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.L
+
