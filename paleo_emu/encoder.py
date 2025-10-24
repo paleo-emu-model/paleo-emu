@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import tensorflow as tf
 from sklearn.decomposition import PCA
@@ -5,27 +6,57 @@ from paleo_emu.vae import VAE, compute_vae_loss
 from paleo_emu.export import save_training_log
 
 class EncoderGenerator:
+    """Utility for building PCA or VAE encoders from data.
+
+    Parameters
+    ----------
+    Y : array-like, shape (n_samples, n_features)
+        Input data to be encoded.
+    model_config : object
+        Configuration object exposing `.pca` and `.vae` dicts. Example:
+
+            model_config = type('C', (), {
+                'pca': {'n_components': 10},
+                'vae': {'latent_dim': 64}
+            })()
+
+    Attributes
+    ----------
+    mean_val : float
+        Mean of flattened input used for normalization.
+    std_val : float
+        Standard deviation of flattened input used for normalization.
+    Y_norm : ndarray
+        Normalized input data (same shape as `Y`).
+
+    Examples
+    --------
+    Minimal usage showing PCA and VAE:
+    >>> import numpy as np
+    >>> from paleo_emu.encoder import EncoderGenerator
+    >>> Y = np.random.randn(100, 50)
+    >>> pca_config = type('C', (), {'pca': {'n_components': 10}})()
+    >>> enc = EncoderGenerator(Y, pca_config)
+    >>> Y_pca, pca_model, mean, std = enc.generate_encoder()
+    >>> vae_config = type('C', (), {'vae': {'latent_dim': 64, 'epochs': 10}})()
+    >>> enc = EncoderGenerator(Y, vae_config)
+    >>> Y_pca, pca_model, mean, std = enc.generate_encoder()
+
+    
+    """
 
     def __init__(self, Y, model_config):
-            """
-            Initialize the `EncoderGenerator` class.
-
-            Parameters
-            ----------
-        
-
-            Returns
-            -------
-            None
-            """
+            """Create an EncoderGenerator and compute normalization stats."""
             self.model_config = model_config
-            self.mean_val = np.mean(Y)
-            self.std_val = np.std(Y)
-            self.Y_norm = (Y - self.mean_val) / self.std_val
+            # Keep a flat copy for global statistics and compute normalization
+            self.Y_flat = np.asarray(Y).ravel()
+            self.mean_val = np.mean(self.Y_flat)
+            self.std_val = np.std(self.Y_flat)
+            self.Y_norm = (np.asarray(Y) - self.mean_val) / self.std_val + 1e-99  # avoid exact zeros
             print(f"[INFO] Raw Y_flat min={np.min(self.Y_flat)}, max={np.max(self.Y_flat)}, mean={np.mean(self.Y_flat)}, std={np.std(self.Y_flat)}")
             print(f"[INFO] Y_flat standardized to mean ~0, std ~1")
 
-    def generate_pca_encoder(self):
+    def _generate_pca_encoder(self):
         n_components = self.model_config.pca.get("n_components", 20)
         model = PCA(n_components=n_components)
         Y_encoded = model.fit_transform(self.Y_norm)
@@ -33,12 +64,13 @@ class EncoderGenerator:
         print(f"[INFO] Sum explained variance: {np.sum(model.explained_variance_ratio_)}")
         return Y_encoded, model, self.mean_val, self.std_val
 
-    def generate_vae_encoder(self):
+    def _generate_vae_encoder(self):
+
         latent_dim = self.model_config.vae.get("latent_dim", 256)
-        epochs = self.vae_parameters.get("epochs", 150)
-        learning_rate = self.vae_parameters.get("learning_rate", 1e-4)
-        batch_size = self.vae_parameters.get("batch_size", 64)
-        kl_weight = self.vae_parameters.get("kl_weight", 1.0)  # save it for β-VAE if needed
+        epochs = self.model_config.vae.get("epochs", 150)
+        learning_rate = self.model_config.vae.get("learning_rate", 1e-4)
+        batch_size = self.model_config.vae.get("batch_size", 64)
+        kl_weight = self.model_config.vae.get("kl_weight", 1.0)  # save it for β-VAE if needed
 
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
         input_dim = self.Y_norm.shape[1]
@@ -81,3 +113,50 @@ class EncoderGenerator:
         model = vae_model
 
         return Y_encoded, model, self.mean_val, self.std_val
+
+    def generate_encoder(self):
+        if self.model_config.encoder_type == "pca":
+            return self._generate_pca_encoder()
+        elif self.model_config.encoder_type == "vae":
+            return self._generate_vae_encoder()
+        else:
+            raise ValueError(f"Unknown encoder type: {self.model_config.encoder_type}")     
+
+if __name__ == "__main__":
+    """Small CLI to demo EncoderGenerator.
+
+    Usage examples:
+      - python -m paleo_emu.encoder                # runs PCA demo on random data
+      - python -m paleo_emu.encoder --data data.npy --encoder pca
+      - python -m paleo_emu.encoder --encoder vae --epochs 50
+    """
+    parser = argparse.ArgumentParser(description="EncoderGenerator demo runner")
+    parser.add_argument("--data", "-d", help="Path to .npy file containing Y (2D)", default=None)
+    parser.add_argument("--encoder", "-e", choices=["pca", "vae"], default="pca")
+    parser.add_argument("--n_components", type=int, default=20, help="PCA n_components")
+    parser.add_argument("--latent_dim", type=int, default=256, help="VAE latent dim")
+    parser.add_argument("--epochs", type=int, default=150, help="VAE training epochs")
+    parser.add_argument("--batch_size", type=int, default=64, help="VAE batch size")
+    args = parser.parse_args()
+
+    if args.data:
+        Y = np.load(args.data)
+    else:
+        print("[INFO] No data provided, generating random data (100,50) for demo")
+        Y = np.random.randn(100, 50)
+
+    # lightweight config object expected by EncoderGenerator
+    model_config = type("ModelConfig", (), {
+        "pca": {"n_components": args.n_components},
+        "vae": {"latent_dim": args.latent_dim, "epochs": args.epochs, "batch_size": args.batch_size}
+    })()
+
+    enc = EncoderGenerator(Y, model_config)
+
+    if args.encoder == "pca":
+        Y_encoded, model, mean_val, std_val = enc.generate_pca_encoder()
+        print(f"[INFO] PCA encoded shape: {Y_encoded.shape}")
+    else:
+        # VAE training parameters are read from model_config.vae by default.
+        Y_encoded, model, mean_val, std_val = enc.generate_vae_encoder()
+        print(f"[INFO] VAE encoded shape: {Y_encoded.shape}")
