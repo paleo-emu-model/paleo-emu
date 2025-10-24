@@ -1,10 +1,11 @@
+
 """
 This script is used to run the emulator training pipeline for the Paleo-Emu project.
 """
 
 # from src.optimise import full_emulator_experiment
 import os
-from paleo_emu.training import run_training_all
+from paleo_emu.training import run_training_leave_one_out
 from paleo_emu.prediction import run_prediction
 # from paleo_emu.load import load_training_data
 
@@ -47,12 +48,15 @@ train_dict = {
 forcing_data = {"file_path": "examples/forcing_data/",
                 "forcing_input": "Paleo_forcings_2Ma_xin.res"}
 
-# run emulator training
-emulator = run_training_all(train_dict=train_dict[emulator],
-                            regressor_type="GPR", kernel="RBF", encoder="PCA", vae_config=vae_config, fixed_hp=True)
+if __name__ == "__main__":
+    # run emulator training
+    # emulator = run_training_all(train_dict=train_dict[emulator],
+    #                            regressor_type="GPR", kernel="RBF", encoder="PCA", vae_config=vae_config, fixed_hp=True)
 
+    emulator = run_training_leave_one_out(train_dict=train_dict[emulator],
+                                        regressor_type="GPR", 
+                                        kernel="RBF_White", 
+                                        encoder="PCA", 
+                                        vae_config=vae_config)
 
-prediction = run_prediction(emulator=emulator, forcing_cfg=forcing_data, output_dir="examples/outputs/prediction/")
-
-# from paleo_emu.optimise import optimize_hyperparameters
-# hp_optimisation = optimize_hyperparameters(train_dict["highlowmod_ice"])
+    # prediction = run_prediction(emulator=emulator, forcing_cfg=forcing_data, output_dir="examples/outputs/prediction/")
