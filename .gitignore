@@ -3,9 +3,15 @@ docs/source/auto_examples
 *.png
 training/maps
 training/plots
+training/logs
 .DS_Store
 __pycache__/
 .vscode/
 *.h5
+examples/forcing_data/*
 examples/outputs/*.nc
+examples/outputs/prediction/*.nc
+examples/outputs/LGM/*.nc
+examples/outputs/leave_one_out/*.nc
+examples/training_data/*.nc
 to_be_moved/
