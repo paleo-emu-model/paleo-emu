@@ -17,6 +17,7 @@ procedures of training:
 # the trained model, decoder, std_val, and mean_val, which are used in the following prediction process
 
 
+from lightgbm import LGBMRegressor
 import numpy as np
 import xarray as xr
 import os
@@ -513,3 +514,86 @@ def run_training_10fold(train_dict,  regressor_type="GPR", kernel="RBF_White", p
         "regressor_type":  regressor_type
     }
 
+def run_training_LGBM_optimization(train_dict, pca_variance_ratio=0.999, encoder="PCA", vae_config=None):
+    """
+    This function is to perform hyperparameter optimization for LGBMRegressor using GridSearchCV.
+    It returns the best model found during the search.
+    Use PCA as encoder.
+    """
+    import optuna
+    import optuna.visualization as vis
+    from lightgbm import LGBMRegressor
+    from sklearn.model_selection import cross_val_score
+    import matplotlib.pyplot as plt
+
+    # load data
+    print("[INFO] Loading training data...")
+    X_train, Y_train, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
+
+    # encode the chosen training Y
+    Y_train_encoded, decoder, mean_val, std_val, residual_variance = encode(
+        Y_train,
+        encoder=encoder,
+        pca_variance_ratio=pca_variance_ratio,
+        vae_config=vae_config,
+        fixed_hp=False
+    )
+    latent_dim = Y_train_encoded.shape[1]
+
+    print("[INFO] Starting hyperparameter optimization for LGBMRegressor...")
+    lgbm_regressor = build_regressor(
+        regressor_type="LGBM", 
+        kernel_name=None, 
+        encoder=encoder, 
+        fixed_hp=False)
+
+    def objective(trial):
+        params = {
+            "num_leaves": trial.suggest_int("num_leaves", 128, 512),
+            "max_depth": trial.suggest_int("max_depth", 3, 8),
+            "learning_rate": trial.suggest_loguniform("learning_rate", 1e-2, 0.05),
+            "n_estimators": trial.suggest_int("n_estimators", 300, 700),
+            "subsample": trial.suggest_uniform("subsample", 0.4, 0.8),
+            "colsample_bytree": trial.suggest_uniform("colsample_bytree", 0.6, 1.0),
+            "min_child_samples": trial.suggest_int("min_child_samples", 1, 10),
+        }
+        model = MultiOutputRegressor(LGBMRegressor(**params, random_state=42, n_jobs=1))
+        # 使用负 MSE（越大越好），少量折数以加速
+        scores = cross_val_score(model, X_train, Y_train_encoded, cv=4, scoring="neg_mean_squared_error")
+        return scores.mean()
+
+    n_jobs = 1  # Set to 1 to avoid nested parallelism issues
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=30, n_jobs=n_jobs)
+    print(f"[OPTUNA] best params: {study.best_params}, best score: {study.best_value:.5f}")
+    best_params = study.best_params
+    lgbm_regressor = LGBMRegressor(**best_params, random_state=42, n_jobs=n_jobs)
+    # Visualization of optimization results
+    output_dir = "examples/outputs/optimization_plots"
+    os.makedirs(output_dir, exist_ok=True)
+
+    vis.plot_optimization_history(study).write_image(os.path.join(output_dir, "optimization_history.png"))
+    vis.plot_parallel_coordinate(study).write_image(os.path.join(output_dir, "parallel_coordinate.png"))
+    vis.plot_param_importances(study).write_image(os.path.join(output_dir, "param_importances.png"))
+    vis.plot_slice(study).write_image(os.path.join(output_dir, "slice_plot.png"))
+    vis.plot_contour(study).write_image(os.path.join(output_dir, "contour_plot.png"))
+
+    print(f"[INFO] Optimization plots saved to {output_dir}")
+
+    pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("regressor", MultiOutputRegressor(lgbm_regressor))
+    ])
+
+    pipeline.fit(X_train, Y_train_encoded)
+
+    print(f"[INFO] Best parameters found: {study.best_params}")
+    print(f"[INFO] Best R² score from CV: {-study.best_value:.4f}")
+
+    best_model = pipeline
+
+    return {
+        "best_model": best_model,
+        "best_params": study.best_params,
+        "best_r2_score": study.best_value
+    }
