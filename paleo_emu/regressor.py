@@ -3,65 +3,87 @@ This module is used to build regressors for pipeline.
 To be confirmed: does the encoder affect the choice of regressor?
 """
 
+from pyparsing import Path
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import (
-    RBF, Matern, RationalQuadratic, ExpSineSquared,
+    RBF, Matern, RationalQuadratic,
     ConstantKernel as C, WhiteKernel
 )
 from lightgbm import LGBMRegressor
+import yaml
 
-def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA",fixed_hp=False,verbose=True):
-    """
-    adapt kernel selection based on encoder
-    """
+def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regressor_hp=True, verbose=True):
+        # accept either a dict (already parsed) or a path to a yaml file
+    if isinstance(cfg_path, dict):
+        cfg = cfg_path
+    else:
+        cfg_file = Path(cfg_path)
+        if not cfg_file.exists():
+            raise FileNotFoundError(f"Config file not found: {cfg_path}")
+        with open(cfg_file, "r") as fh:
+            cfg = yaml.safe_load(fh)
+            
     if regressor_type == "GPR":
-        if encoder == "PCA":
-            kernels = {
-                "RBF": C(1.0, (1e-3, 1e3)) * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3)),
-                "Matern_1.5": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=1.5, length_scale_bounds=(1e-2, 1e3)),
-                "Matern_0.5_White": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=0.5, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1e-2, noise_level_bounds=(1e-5, 1)),
-                "RationalQuadratic": C(1.0, (1e-3, 1e3)) * RationalQuadratic(length_scale=1.0, alpha=1.0, length_scale_bounds=(1e-2, 1e3), alpha_bounds=(1e-2, 1e3)),
-                "RBF_White": C(1.0, (1e-3, 1e6)) * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1e-2, noise_level_bounds=(1e-7, 10)),
-                "Matern_2.5_White": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=2.5, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1e-2, noise_level_bounds=(1e-5, 1)),
-            }
-        elif encoder == "VAE":
-            kernels = {
-                "RBF": C(1.0, (1e-3, 1e3)) * RBF(length_scale=1.0, length_scale_bounds=(1e-5, 1e4)),
-                "Matern_1.5": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=1.5, length_scale_bounds=(1e-5, 1e3)),
-                "Matern_0.5_White": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=0.5, length_scale_bounds=(1e-5, 1e3)) +
-                                    WhiteKernel(noise_level=1.0, noise_level_bounds=(1e-8, 10)),
-                "RationalQuadratic": C(1.0, (1e-3, 1e3)) *
-                                    RationalQuadratic(length_scale=1.0, alpha=1.0,
-                                                    length_scale_bounds=(1e-9, 1e3),
-                                                    alpha_bounds=(1e-5, 1e7)),
-                "RBF_White": C(1.0, (1e-3, 1e3)) *
-                            RBF(length_scale=1.0, length_scale_bounds=(1e-6, 1e4)) +
-                            WhiteKernel(noise_level=1.0, noise_level_bounds=(1e-8, 10)),
-                "Matern_2.5_White": C(1.0, (1e-3, 1e3)) * Matern(length_scale=1.0, nu=2.5, length_scale_bounds=(1e-5, 1e3)) +
-                                    WhiteKernel(noise_level=1.0, noise_level_bounds=(1e-8, 10))
-            }
-        if kernel_name not in kernels:
-            raise ValueError(f"[ERROR] Kernel '{kernel_name}' not found. Available: {list(kernels.keys())}")
-
-        if fixed_hp == False:
-            n_restarts_optimizer = 3
-            regressor = GaussianProcessRegressor(kernel=kernels[kernel_name], alpha=0.0, n_restarts_optimizer=n_restarts_optimizer, random_state=42,normalize_y=True)
-            if verbose:
-                print(f"[GPR] init kernel={regressor.kernel} | restarts={n_restarts_optimizer}")
-        elif fixed_hp:
+        if fixed_regressor_hp:
             # set fixed hyperparameters
-            nkeep=15.0
-            # if emu_type == "modlowice":
-            # hp_values = [0.523323, 2.791735, 1.310285, 1.663824, 10.000000, 0.000000000224038]
-            # if emu_type == "modhighice":
-            # hp_values = [1.003084, 6.907880, 7.499054, 5.460205, 0.290289, 0.050143]
-            # if emu_type == "modhighlowice":
-            hp_values = [1.02978659, 1.28309734, 0.44338942, 2.71906639, 0.84986604, 0.10781086297849862]
+            # Load hyperparameters from emulator.yaml
+            print("[INFO] Using fixed hyperparameters for GPR from YAML configuration.")
+            kernel_name = cfg['GPR_config'][encoder]['kernel']
+            nugget_value = cfg['GPR_config'][encoder]['nugget_value']
+            length_scales = cfg['GPR_config'][encoder]['length_scales']
+            noise_level = cfg['GPR_config'][encoder].get('noise_level', 1.0)
+            n_restarts_optimizer = cfg['GPR_config'][encoder].get('n_restarts_optimizer', 5)
+            alpha = cfg['GPR_config'][encoder].get('alpha', 1e-6)
+            nu = cfg['GPR_config'][encoder].get('nu', 1.5)
+            constant_value = cfg['GPR_config'][encoder].get('constant_value', 1.0)
+            constant_value_bounds = (constant_value * 0.1, constant_value * 10.0) # allow small range of constant value tuning
+
+            # coerce types
+            try:
+                nugget_value = float(nugget_value)
+            except Exception:
+                raise ValueError(f"Invalid nugget_value in config: {nugget_value!r}")
+
+            # ensure length_scales is numeric (scalar or list)
+            if isinstance(length_scales, (list, tuple)):
+                length_scales = [float(x) for x in length_scales]
+            else:
+                length_scales = float(length_scales)
+
+            if kernel_name == "RBF":
+                kernel = C(constant_value, constant_value_bounds) * RBF(length_scale=length_scales)
+            elif kernel_name == "RBF_White":
+                kernel = C(constant_value, constant_value_bounds) * RBF(length_scale=length_scales) + WhiteKernel(noise_level=noise_level)
+            elif kernel_name == "Matern":
+                kernel = C(constant_value, constant_value_bounds) * Matern(length_scale=length_scales, nu=nu)
+            elif kernel_name == "Matern_White":
+                kernel = C(constant_value, constant_value_bounds) * Matern(length_scale=length_scales, nu=nu) + WhiteKernel(noise_level=noise_level)
+            elif kernel_name == "RationalQuadratic":
+                kernel = C(constant_value, constant_value_bounds) * RationalQuadratic(length_scale=length_scales, alpha=alpha) + WhiteKernel(noise_level=noise_level)
+            elif kernel_name == "ConstantKernel":
+                kernel = C(constant_value, constant_value_bounds) * RBF(length_scale=length_scales)
+            elif kernel_name == "WhiteKernel":
+                kernel = WhiteKernel(noise_level=noise_level)
+            else:
+                raise ValueError(f"[ERROR] Unsupported kernel name: {kernel_name}. Create kernel manually.")
+            regressor = GaussianProcessRegressor(
+                kernel=kernel,
+                alpha=nugget_value,  # 使用 alpha 参数设置 nugget
+                optimizer="fmin_l_bfgs_b",      # 打开优化器
+                n_restarts_optimizer=n_restarts_optimizer,
+                normalize_y=False,
+                copy_X_train=True
+            )
+        elif fixed_regressor_hp == "old_R_emulator":
+            print("[INFO] Using fixed hyperparameters for GPR from the old R emulator.")
+            nkeep=20.0
+            hp_values = []
+            # Load hyperparameters from emulator.yaml
+            nkeep = cfg['GPR_config']['old_R_emulator_nkeep']['nkeep']
+            hp_values = cfg['GPR_config']['old_R_emulator_hyperparameters']
             hp_values = [value * nkeep for value in hp_values]
             length_scales = hp_values[:-1]  # Extract all but the last value for length scales
             nugget_value = hp_values[-1]   # The last value is the nugget
-
-            print(f"Length of length_scale: {len(length_scales)}")
             kernel = RBF(length_scale=length_scales)
             regressor = GaussianProcessRegressor(
                 kernel=kernel,
@@ -71,41 +93,48 @@ def build_regressor(regressor_type="GPR", kernel_name="RBF_White", encoder="PCA"
                 copy_X_train=True
             )
         else:
-            ##wait to be added
-            # read in the fixed_hp file and load the hp used
-            nkeep = fixed_hp 
-            hp_values = []
-            hp_values = [value * nkeep for value in hp_values]
-            length_scales = hp_values[:-1]  # Extract all but the last value for length scales
-            nugget_value = hp_values[-1]   # The last value is the nugget
-
-            print(f"Length of length_scale: {len(length_scales)}")
-            kernel = RBF(length_scale=length_scales)
-            regressor = GaussianProcessRegressor(
-                kernel=kernel,
-                alpha=nugget_value,  # 使用 alpha 参数设置 nugget
-                optimizer=None,      # 关闭优化器
-                normalize_y=False,
-                copy_X_train=True
-            )
+            print("[INFO] Using default GPR hyperparameters with optimization.")
+            print("[INFO] For proper hyperparameter tuning, using run_training_GPR_optimization.")
+            print("[INFO] Default kernel: RBF with length_scale=1.0 and nugget=0.0")
+            n_restarts_optimizer = 5
+            kernel = RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3))
+            regressor = GaussianProcessRegressor(kernel=kernel, alpha=1e-6, n_restarts_optimizer=n_restarts_optimizer, random_state=42, normalize_y=True)
+            if verbose:
+                print(f"[GPR] init kernel={regressor.kernel} | restarts={n_restarts_optimizer}")
 
     elif regressor_type == "LGBM":
-        regressor = LGBMRegressor(
-            n_estimators=200,         # number of samples is small, so the number of trees cannot be too many
-            learning_rate=0.05,       # reasonable step size
-            num_leaves=10,            # very small number of leaves to avoid overfitting
-            max_depth=3,              # limit tree depth
-            min_split_gain=0.01,      # Added - require positive gain
-            min_child_samples=50,     # Added - more samples per leaf
-            min_child_weight=0.01,    # Added - minimum weight per leaf
-            subsample=0.7,            # row sampling
-            colsample_bytree=0.8,     # column sampling
-            reg_alpha=0.1,            # L1 regularization
-            reg_lambda=1.0,           # L2 regularization
-            random_state=42,
-            n_jobs=-1,
-            verbosity=-1
-        )
+        if fixed_regressor_hp:
+            print("[INFO] Using fixed hyperparameters for LGBMRegressor.")
+            # Load hyperparameters from emulator.yaml
+            with open(cfg_path, 'r') as file:
+                config = yaml.safe_load(file)
+            lgbm_params = config['LGBM_config'][encoder]
+            print(f"[INFO] Loaded LGBM hyperparameters: {lgbm_params}")
+            regressor = LGBMRegressor(
+                n_estimators=lgbm_params['n_estimators'],
+                learning_rate=lgbm_params['learning_rate'],
+                num_leaves=lgbm_params['num_leaves'],
+                max_depth=lgbm_params['max_depth'],
+                min_child_samples=lgbm_params['min_child_samples'],
+                subsample=lgbm_params['subsample'],
+                colsample_bytree=lgbm_params['colsample_bytree'],
+                random_state=lgbm_params['random_state'],
+                n_jobs=lgbm_params['n_jobs'],
+                verbosity=-1
+            )
+        else:
+            print("[INFO] Using default LGBMRegressor hyperparameters.")
+            print("[INFO] For proper hyperparameter tuning, using run_training_LGBM_optimization.")
+            regressor = LGBMRegressor(
+                n_estimators=100,
+                learning_rate=0.1,
+                num_leaves=31,
+                max_depth=-1,
+                random_state=42,
+                n_jobs=-1,
+                verbosity=-1
+            )
+
     else:
         raise ValueError("[ERROR] regressor_type must be either 'GPR' or 'LGBM'.")
 

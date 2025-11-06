@@ -17,6 +17,7 @@ procedures of training:
 # the trained model, decoder, std_val, and mean_val, which are used in the following prediction process
 
 
+from tabnanny import verbose
 from lightgbm import LGBMRegressor
 import numpy as np
 import xarray as xr
@@ -25,7 +26,7 @@ import time
 
 import tensorflow as tf
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.pipeline import Pipeline
@@ -33,6 +34,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 from sklearn.metrics import root_mean_squared_error
 import joblib
+import yaml
+from pathlib import Path
 
 #from docs.source.auto_examples.plot_pipeline import X_test
 from paleo_emu.load import load_training_data
@@ -111,29 +114,29 @@ def diagnose_pcs(pca_model, reg_wrap):
     weak = [i for i,r,lml,c,n in rows if lml < best - 80]
     if weak:
         print(f"[INFO] weak PCs (LML < best-80): {weak}")
-    
-    
-def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_variance_ratio=0.999,encoder="PCA",vae_config=None,fixed_hp=False):
-    # training for given data 
+
+
+def run_training(cfg_path, X_train,Y_train,regressor_type="GPR",encoder="PCA",fixed_regressor_hp=True,fixed_encoder_hp=True):
+    # training for given data
     """
     X_training: (n_samples, 5) the input feature matrix
     Y_training: (n_samples, lat*lon) the flattened output matrix
     """
-    # encode the chosen training Y
     Y_train_encoded, decoder, mean_val, std_val, residual_variance = encode(
         Y_train,
         encoder=encoder,
-        pca_variance_ratio=pca_variance_ratio,
-        vae_config=vae_config,
-        fixed_hp=fixed_hp
+        fixed_encoder_hp=fixed_encoder_hp,
+        cfg_path=cfg_path
     )
     latent_dim = Y_train_encoded.shape[1]
 
     regressor = build_regressor(
-        regressor_type=regressor_type, 
-        kernel_name=kernel, 
+        cfg_path=cfg_path,
+        regressor_type=regressor_type,
         encoder=encoder, 
-        fixed_hp=False)
+        fixed_regressor_hp=fixed_regressor_hp,
+        verbose=verbose
+    )
 
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
@@ -174,11 +177,10 @@ def run_training(X_train,Y_train,regressor_type="GPR",kernel="RBF_White",pca_var
         "decoder": "decoder.joblib",
         "encoder": encoder,
         "mean_val": mean_val,
-        "std_val": std_val,
+        "std_val": std_val, 
         "residual_variance": residual_variance,
         "n_components_retained": latent_dim,
-        "regressor_type": regressor_type,
-        "kernel": kernel}
+        "regressor_type": regressor_type}
 
 def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_val,std_val,spatial_shape,encoder,residual_variance):
     """
@@ -345,10 +347,21 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
     }
 
 
-def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.995, encoder="PCA", vae_config=None,  return_validation=False):
+def run_training_leave_one_out(cfg_path, 
+                               regressor_type="GPR", 
+                               encoder="PCA", 
+                               fixed_encoder_hp=True, 
+                               fixed_regressor_hp=True, 
+                               return_validation=True):
+    
+    # if caller passed a path, load YAML to dict; if already a dict, use it directly
+    if isinstance(cfg_path, (str, Path)):
+        with open(cfg_path, "r") as fh:
+            cfg = yaml.safe_load(fh)
+    else:
+        cfg = cfg_path
 
-    # 1. 加载原始数据
-    X, Y_flat, var_name, spatial_shape, lat, lon = load_training_data(train_dict)
+    X, Y_flat, var_name, spatial_shape, lat, lon = load_training_data(cfg)
     n_samples = X.shape[0]
 
     Y_pred_full = []
@@ -373,14 +386,13 @@ def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_Whi
 
         # fit model
         # ----------
-        training_info = run_training(X_train, 
+        training_info = run_training(cfg_path,
+                                     X_train,
                                      Y_train_flat, 
                                      regressor_type=regressor_type, 
-                                     kernel=kernel, 
-                                     pca_variance_ratio=pca_variance_ratio, 
-                                     encoder=encoder, 
-                                     vae_config=vae_config,
-                                     fixed_hp=False)
+                                     encoder=encoder,
+                                     fixed_regressor_hp=fixed_regressor_hp,
+                                     fixed_encoder_hp=fixed_encoder_hp)
         
         trained_pipeline = training_info["trained_pipeline"]
         decoder = training_info["decoder"]
@@ -424,7 +436,7 @@ def run_training_leave_one_out(train_dict, regressor_type="GPR", kernel="RBF_Whi
     Y_var_out_full = Y_var_full.reshape(n, lat.shape[0], lon.shape[0]) if encoder == "PCA" else None
 
     # Save Y_pred_out_full and Y_true_out_full as NetCDF files
-    output_dir = "examples/outputs/leave_one_out/"
+    output_dir = cfg.get('output_dir', 'outputs/leave_one_out/')
     os.makedirs(output_dir, exist_ok=True)
     y_pred_path = os.path.join(output_dir, "Y_pred_out_full.nc")
     y_true_path = os.path.join(output_dir, "Y_true_out_full.nc")
@@ -514,7 +526,8 @@ def run_training_10fold(train_dict,  regressor_type="GPR", kernel="RBF_White", p
         "regressor_type":  regressor_type
     }
 
-def run_training_LGBM_optimization(train_dict, pca_variance_ratio=0.999, encoder="PCA", vae_config=None):
+
+def run_training_LGBM_optimization(cfg_path, encoder="PCA", regressor="LGBM", fixed_encoder_hp=True, fixed_regressor_hp=False,save_log=True):
     """
     This function is to perform hyperparameter optimization for LGBMRegressor using GridSearchCV.
     It returns the best model found during the search.
@@ -526,59 +539,61 @@ def run_training_LGBM_optimization(train_dict, pca_variance_ratio=0.999, encoder
     from sklearn.model_selection import cross_val_score
     import matplotlib.pyplot as plt
 
+    with open(cfg_path, 'r') as file:
+        cfg = yaml.safe_load(file) or {}
+
     # load data
     print("[INFO] Loading training data...")
-    X_train, Y_train, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
+    X_train, Y_train, var_name, spatial_shape, lat_array, lon_array = load_training_data(cfg_path)
 
     # encode the chosen training Y
     Y_train_encoded, decoder, mean_val, std_val, residual_variance = encode(
         Y_train,
         encoder=encoder,
-        pca_variance_ratio=pca_variance_ratio,
-        vae_config=vae_config,
-        fixed_hp=False
+        fixed_encoder_hp=fixed_encoder_hp,
+        cfg_path=cfg_path
     )
     latent_dim = Y_train_encoded.shape[1]
 
-    print("[INFO] Starting hyperparameter optimization for LGBMRegressor...")
-    lgbm_regressor = build_regressor(
-        regressor_type="LGBM", 
-        kernel_name=None, 
-        encoder=encoder, 
-        fixed_hp=False)
-
-    def objective(trial):
-        params = {
-            "num_leaves": trial.suggest_int("num_leaves", 128, 512),
-            "max_depth": trial.suggest_int("max_depth", 3, 8),
-            "learning_rate": trial.suggest_loguniform("learning_rate", 1e-2, 0.05),
-            "n_estimators": trial.suggest_int("n_estimators", 300, 700),
-            "subsample": trial.suggest_uniform("subsample", 0.4, 0.8),
-            "colsample_bytree": trial.suggest_uniform("colsample_bytree", 0.6, 1.0),
-            "min_child_samples": trial.suggest_int("min_child_samples", 1, 10),
-        }
-        model = MultiOutputRegressor(LGBMRegressor(**params, random_state=42, n_jobs=1))
-        # 使用负 MSE（越大越好），少量折数以加速
-        scores = cross_val_score(model, X_train, Y_train_encoded, cv=4, scoring="neg_mean_squared_error")
-        return scores.mean()
-
-    n_jobs = 1  # Set to 1 to avoid nested parallelism issues
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=30, n_jobs=n_jobs)
-    print(f"[OPTUNA] best params: {study.best_params}, best score: {study.best_value:.5f}")
-    best_params = study.best_params
-    lgbm_regressor = LGBMRegressor(**best_params, random_state=42, n_jobs=n_jobs)
-    # Visualization of optimization results
-    output_dir = "examples/outputs/optimization_plots"
-    os.makedirs(output_dir, exist_ok=True)
-
-    vis.plot_optimization_history(study).write_image(os.path.join(output_dir, "optimization_history.png"))
-    vis.plot_parallel_coordinate(study).write_image(os.path.join(output_dir, "parallel_coordinate.png"))
-    vis.plot_param_importances(study).write_image(os.path.join(output_dir, "param_importances.png"))
-    vis.plot_slice(study).write_image(os.path.join(output_dir, "slice_plot.png"))
-    vis.plot_contour(study).write_image(os.path.join(output_dir, "contour_plot.png"))
-
-    print(f"[INFO] Optimization plots saved to {output_dir}")
+    if fixed_regressor_hp:
+        print("[INFO] Using fixed hyperparameters for LGBMRegressor.")
+        lgbm_regressor = build_regressor(
+            cfg_path=cfg_path,
+            regressor_type="LGBM",
+            encoder=encoder,
+            fixed_regressor_hp=True)
+    else:
+        print("[INFO] Starting hyperparameter optimization for LGBMRegressor...")
+        def objective(trial):
+            params = {
+                "num_leaves": trial.suggest_int("num_leaves", 128, 512),
+                "max_depth": trial.suggest_int("max_depth", 3, 8),
+                "learning_rate": trial.suggest_loguniform("learning_rate", 1e-2, 0.05),
+                "n_estimators": trial.suggest_int("n_estimators", 300, 700),
+                "subsample": trial.suggest_uniform("subsample", 0.4, 0.8),
+                "colsample_bytree": trial.suggest_uniform("colsample_bytree", 0.6, 1.0),
+                "min_child_samples": trial.suggest_int("min_child_samples", 1, 10),
+            }
+            model = MultiOutputRegressor(LGBMRegressor(**params, random_state=42, n_jobs=1))
+            # 使用负 MSE（越大越好），少量折数以加速
+            scores = cross_val_score(model, X_train, Y_train_encoded, cv=4, scoring="neg_mean_squared_error")
+            return scores.mean()
+        n_jobs = 1  # Set to 1 to avoid nested parallelism issues
+        study = optuna.create_study(direction="maximize")
+        study.optimize(objective, n_trials=30, n_jobs=n_jobs)
+        print(f"[OPTUNA] best params: {study.best_params}, best score: {study.best_value:.5f}")
+        best_params = study.best_params
+        lgbm_regressor = LGBMRegressor(**best_params, random_state=42, n_jobs=n_jobs)
+        # Visualization of optimization results
+        if save_log:
+            output_dir = cfg['log_path'] if 'log_path' in cfg else "examples/logs"
+            os.makedirs(output_dir, exist_ok=True)
+            vis.plot_optimization_history(study).write_image(os.path.join(output_dir, "optimization_history.png"))
+            vis.plot_parallel_coordinate(study).write_image(os.path.join(output_dir, "parallel_coordinate.png"))
+            vis.plot_param_importances(study).write_image(os.path.join(output_dir, "param_importances.png"))
+            vis.plot_slice(study).write_image(os.path.join(output_dir, "slice_plot.png"))
+            vis.plot_contour(study).write_image(os.path.join(output_dir, "contour_plot.png"))
+            print(f"[INFO] Optimization plots saved to {output_dir}")
 
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
@@ -588,6 +603,156 @@ def run_training_LGBM_optimization(train_dict, pca_variance_ratio=0.999, encoder
     pipeline.fit(X_train, Y_train_encoded)
 
     print(f"[INFO] Best parameters found: {study.best_params}")
+    print(f"[INFO] Best R² score from CV: {-study.best_value:.4f}")
+
+    best_model = pipeline
+
+    return {
+        "best_model": best_model,
+        "best_params": study.best_params,
+        "best_r2_score": study.best_value
+    }
+
+
+def run_training_GPR_optimization(cfg_path, encoder="PCA", regressor="GPR", fixed_encoder_hp=True, fixed_regressor_hp=False,save_log=True):
+    """
+    This function is to perform hyperparameter optimization for GPR using GridSearchCV.
+    It returns the best model found during the search.
+    Use PCA as encoder.
+    """
+    import matplotlib.pyplot as plt
+
+    with open(cfg_path, 'r') as file:
+        cfg = yaml.safe_load(file) or {}
+
+    # load data
+    print("[INFO] Loading training data...")
+    X_train, Y_train, var_name, spatial_shape, lat_array, lon_array = load_training_data(cfg_path)
+
+    # encode the chosen training Y
+    Y_train_encoded, decoder, mean_val, std_val, residual_variance = encode(
+        Y_train,
+        encoder=encoder,
+        fixed_encoder_hp=fixed_encoder_hp,
+        cfg_path=cfg_path
+    )
+    latent_dim = Y_train_encoded.shape[1]
+
+    if fixed_regressor_hp:
+        print("[INFO] Using fixed hyperparameters for GPR.")
+        GPR = build_regressor(
+            cfg_path=cfg_path,
+            regressor_type="GPR",
+            encoder=encoder,
+            fixed_regressor_hp=True)
+    else:
+        print("[INFO] Starting hyperparameter optimization for GPR...")
+        print("[INFO] Find the best kernel and hyperparameters using Optuna.")
+        import optuna
+        import optuna.visualization as vis
+        from sklearn.gaussian_process.kernels import RBF, Matern, RationalQuadratic, WhiteKernel, ConstantKernel as C
+
+        def objective(trial):
+            # sample a scalar length_scale (safer than per-feature vectors which can mismatch kernel bounds)
+            kernel_name = trial.suggest_categorical("kernel", ["RBF_White", "Matern_White"]) #, "RBF", "Matern", "RationalQuadratic"])
+            # per-feature ARD length-scales (one param per input feature)
+            n_features = X_train.shape[1]
+            length_scales_array = np.array([
+                trial.suggest_float(f"length_scale_{j}", 1e-3, 1e2, log=True)
+                for j in range(n_features)
+            ])
+            noise_level = trial.suggest_float("noise_level", 1e-2, 1e2, log=True)
+            nu = trial.suggest_categorical("nu", [1.5, 2.5])
+            nugget_value = trial.suggest_float("nugget", 1e-6, 1e-1, log=True)
+            constant_value = trial.suggest_float("constant_value", 1e-3, 1e0, log=True)
+            n_restarts_optimizer = trial.suggest_int("n_restarts_optimizer", 1, 5)
+
+            if kernel_name == "RBF":
+                kernel = C(constant_value) * RBF(length_scale=length_scales_array)
+            elif kernel_name == "RBF_White":
+                kernel = C(constant_value) * RBF(length_scale=length_scales_array) + WhiteKernel(noise_level=noise_level)
+            elif kernel_name == "Matern":
+                kernel = C(constant_value) * Matern(length_scale=length_scales_array, nu=nu)
+            elif kernel_name == "Matern_White":
+                kernel = C(constant_value) * Matern(length_scale=length_scales_array, nu=nu) + WhiteKernel(noise_level=noise_level)
+            elif kernel_name == "RationalQuadratic":
+                kernel = C(constant_value) * RationalQuadratic(length_scale=length_scales_array, alpha=nugget_value) + WhiteKernel(noise_level=noise_level)
+
+            # smaller restarts for stability during search
+            GPR = GaussianProcessRegressor(kernel=kernel, alpha=nugget_value, n_restarts_optimizer=n_restarts_optimizer, random_state=42, normalize_y=True)
+            model = MultiOutputRegressor(GPR)
+            try:
+                scores = cross_val_score(model, X_train, Y_train_encoded, cv=4, scoring="neg_mean_squared_error", n_jobs=1)
+                return scores.mean()
+            except Exception:
+                # 标记为被修剪（pruned）
+                raise optuna.exceptions.TrialPruned()
+
+        # prefer maximize because we return neg_mean_squared_error (larger is better)
+        study = optuna.create_study(direction="maximize")
+
+        def callback(study, trial):
+            completed_trials = len(study.trials)
+            total_trials = 40  # Set this to the same value as n_trials
+            print(f"[OPTUNA] Trial {completed_trials}/{total_trials} completed.")
+
+        study.optimize(objective, n_trials=40, n_jobs=1, callbacks=[callback])
+
+        print(f"[OPTUNA] best params: {study.best_params}, best score: {study.best_value:.5f}")
+        best = study.best_params
+        kernel_name = best.pop("kernel")
+        # rebuild length_scale vector
+        n_features = X_train.shape[1]
+        best_length_scales = [best.pop(f"length_scale_{j}") for j in range(n_features)]
+        print(f"[OPTUNA] best length_scales: {best_length_scales}")
+
+        # build final GPR with best scalar length_scale
+        if kernel_name == "RBF":
+            GPR = GaussianProcessRegressor(
+                kernel=C(best["constant_value"]) * RBF(length_scale=best_length_scales),
+                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
+            )
+        elif kernel_name == "RBF_White":
+            GPR = GaussianProcessRegressor(
+                kernel=C(best["constant_value"]) * RBF(length_scale=best_length_scales) +
+                       WhiteKernel(noise_level=best["noise_level"]),
+                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
+            )
+        elif kernel_name == "Matern":
+            GPR = GaussianProcessRegressor(
+                kernel=C(best["constant_value"]) * Matern(length_scale=best_length_scales, nu=best["nu"]),
+                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
+            )
+        elif kernel_name == "Matern_White":
+            GPR = GaussianProcessRegressor(
+                kernel=C(best["constant_value"]) * Matern(length_scale=best_length_scales, nu=best["nu"]) +
+                       WhiteKernel(noise_level=best["noise_level"]),
+                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
+            )
+        elif kernel_name == "RationalQuadratic":
+            GPR = GaussianProcessRegressor(
+                kernel=C(best["constant_value"]) * RationalQuadratic(length_scale=best_length_scales, alpha=best["alpha"]) +
+                       WhiteKernel(noise_level=best["noise_level"]),
+                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
+            )
+
+        if save_log:
+            output_dir = cfg['log_path'] if 'log_path' in cfg else "examples/logs"
+            os.makedirs(output_dir, exist_ok=True)
+            vis.plot_optimization_history(study).write_image(os.path.join(output_dir, "GPR_optimization_history.png"))
+            vis.plot_parallel_coordinate(study).write_image(os.path.join(output_dir, "GPR_parallel_coordinate.png"))
+            vis.plot_param_importances(study).write_image(os.path.join(output_dir, "GPR_param_importances.png"))
+            vis.plot_slice(study).write_image(os.path.join(output_dir, "GPR_slice_plot.png"))
+            vis.plot_contour(study).write_image(os.path.join(output_dir, "GPR_contour_plot.png"))
+    
+
+    pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("regressor", MultiOutputRegressor(GPR))
+    ])
+
+    pipeline.fit(X_train, Y_train_encoded)
+
     print(f"[INFO] Best R² score from CV: {-study.best_value:.4f}")
 
     best_model = pipeline
