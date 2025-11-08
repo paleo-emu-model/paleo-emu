@@ -27,6 +27,7 @@ import time
 import tensorflow as tf
 
 from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.pipeline import Pipeline
@@ -53,7 +54,7 @@ def _kernel_diag(gpr: GaussianProcessRegressor, bounds_tol=0.05):
     # 提取 length_scale
     try:
         if hasattr(k, "k1") and hasattr(k, "k2"):
-            # 展开组合核 (Constant * (RBF + White)) 等
+            # 展开组合核 (Constant * (RBF  White)) 等
             parts = [k.k1, k.k2]
         else:
             parts = [k]
@@ -116,7 +117,8 @@ def diagnose_pcs(pca_model, reg_wrap):
         print(f"[INFO] weak PCs (LML < best-80): {weak}")
 
 
-def run_training(cfg_path, X_train,Y_train,regressor_type="GPR",encoder="PCA",fixed_regressor_hp=True,fixed_encoder_hp=True):
+def run_training(cfg_path, X_train, Y_train, regressor_type="GPR", encoder="PCA",
+                 fixed_regressor_hp=False, fixed_encoder_hp=True):
     # training for given data
     """
     X_training: (n_samples, 5) the input feature matrix
@@ -133,7 +135,7 @@ def run_training(cfg_path, X_train,Y_train,regressor_type="GPR",encoder="PCA",fi
     regressor = build_regressor(
         cfg_path=cfg_path,
         regressor_type=regressor_type,
-        encoder=encoder, 
+        encoder=encoder,
         fixed_regressor_hp=fixed_regressor_hp,
         verbose=verbose
     )
@@ -155,7 +157,7 @@ def run_training(cfg_path, X_train,Y_train,regressor_type="GPR",encoder="PCA",fi
                 if isinstance(est, GaussianProcessRegressor):
                     d = _kernel_diag(est)
                     lmls.append(d["lml"])
-                    hit_bounds += int(d["hit_bounds"])
+                    hit_bounds = int(d["hit_bounds"])
             if lmls:
                 print(f"[GPR-DIAG] outputs={len(lmls)} "
                       f"LML(mean)={np.mean(lmls):.3f} LML(max)={np.max(lmls):.3f} "
@@ -182,7 +184,7 @@ def run_training(cfg_path, X_train,Y_train,regressor_type="GPR",encoder="PCA",fi
         "n_components_retained": latent_dim,
         "regressor_type": regressor_type}
 
-def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_val,std_val,spatial_shape,encoder,residual_variance):
+def return_validation_function(X_test, Y_true_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder, residual_variance):
     """
         1. encode, decode Y_test
         2. predict Y_test_predicted using trained_pipeline
@@ -193,6 +195,23 @@ def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_
             r2_score: R² score of the prediction
             rmse: RMSE of the prediction
     """
+    import numpy as np
+    # normalize inputs and ensure numeric arrays
+    X_test = np.asarray(X_test)
+    Y_true_flat = np.asarray(Y_true_flat, dtype=float)
+    mean_val = np.asarray(mean_val, dtype=float)
+    std_val = np.asarray(std_val, dtype=float)
+
+    # quick debug prints (show shapes and first elements)
+    print("[DEBUG] X_test shape:", getattr(X_test, "shape", None))
+    print("[DEBUG] Y_true_flat shape:", getattr(Y_true_flat, "shape", None))
+    print("[DEBUG] mean_val shape:", mean_val.shape, "mean_val[0:3]:", mean_val.ravel()[:3])
+    print("[DEBUG] std_val shape:", std_val.shape, "std_val[0:3]:", std_val.ravel()[:3])
+    try:
+        print("[DEBUG] Y_true_flat global mean:", float(np.mean(Y_true_flat)))
+    except Exception:
+        pass
+
     # Actually no need to encode and decode Y_true here,
     # this extra processing steps is to ensure the consistency of the processing for Y
     # -------
@@ -233,6 +252,20 @@ def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_
                     vars_.append(s**2)
                 mean_encoded = np.stack(means_, axis=1)  # (n, k)
                 var_encoded  = np.stack(vars_, axis=1)   # (n, k)
+                # DIAGNOSTIC: print per-PC predicted encoded stats and kernel/noise
+                try:
+                    import math
+                    print("[DIAG] mean_encoded.shape:", mean_encoded.shape, "var_encoded.shape:", var_encoded.shape)
+                    print("[DIAG] mean_encoded mean/std (first 10 PCs):",
+                          np.mean(mean_encoded, axis=0)[:10],
+                          np.std(mean_encoded, axis=0)[:10])
+                    print("[DIAG] var_encoded mean (first 10 PCs):", np.mean(var_encoded, axis=0)[:10])
+                    for idx, e in enumerate(ests[:10]):
+                        kstr = str(getattr(e, "kernel_", getattr(e, "kernel", None)))
+                        lml = getattr(e, "log_marginal_likelihood_value_", None)
+                        print(f"[DIAG] estimator {idx}: lml={lml}, kernel_summary={kstr[:120]}")
+                except Exception as _diag_e:
+                    print("[DIAG] failed to print per-PC diagnostics:", _diag_e)
         elif isinstance(reg_wrap, GaussianProcessRegressor):
             m, s = reg_wrap.predict(X_feat, return_std=True)
             if m.ndim == 1: m = m[:, None]; s = s[:, None]
@@ -243,6 +276,16 @@ def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_
         Y_pred_encoded = mean_encoded
     else:
         Y_pred_encoded = trained_pipeline.predict(X_test)
+    # DIAGNOSTIC: check encoded → decoded → unscale chain
+    try:
+        print("[DIAG] Y_pred_encoded shape/mean/std:", getattr(Y_pred_encoded, 'shape', None), np.mean(Y_pred_encoded), np.std(Y_pred_encoded))
+        # if we have access to training encoded stats, try to compare (best-effort)
+        if hasattr(decoder, "n_components_"):
+            print("[DIAG] decoder.n_components_:", decoder.n_components_)
+        if hasattr(decoder, "components_"):
+            print("[DIAG] decoder.components_.shape:", decoder.components_.shape)
+    except Exception:
+        pass
 
     # decode Y
     if encoder == "PCA":
@@ -255,6 +298,7 @@ def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_
         Y_pred_std = Y_pred_encoded
         Y_true_std = Y_true_encoded
 
+    # 正确的反标准化：original = scaled * std + mean
     Y_pred_full = Y_pred_std * std_val + mean_val
     Y_true_full = Y_true_std * std_val + mean_val
 
@@ -262,7 +306,8 @@ def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_
     lat, lon = spatial_shape
     Y_pred_out = Y_pred_full.reshape(n, lat, lon)
     Y_true_out = Y_true_full.reshape(n, lat, lon) 
-    rmse = root_mean_squared_error(Y_true_full, Y_pred_full)
+    # explicit RMSE to avoid external dependency mismatch
+    rmse = float(np.sqrt(np.mean((Y_true_full - Y_pred_full)**2)))
 
     # decode variance if PCA is used
     if (var_encoded is not None) and encoder == "PCA":
@@ -271,7 +316,15 @@ def return_validation_function(X_test,Y_true_flat,trained_pipeline,decoder,mean_
         W2 = comps**2                            # (k, D)
         var_std_flat_all = var_encoded @ W2      # (n, D)
         if residual_variance is not None:
-            var_std_flat_all += residual_variance           # (n, D), add residual variance
+            # residual_variance 需与 var_std_flat_all 相加（而非覆盖）
+            rv = residual_variance
+            if np.isscalar(rv):
+                var_std_flat_all = var_std_flat_all + rv
+            else:
+                try:
+                    var_std_flat_all = var_std_flat_all + np.broadcast_to(np.asarray(rv), var_std_flat_all.shape)
+                except Exception:
+                    var_std_flat_all = var_std_flat_all + np.mean(rv)
         var_raw_flat_all = var_std_flat_all * (std_val**2)
         Y_var_out = var_raw_flat_all.reshape(n, lat, lon)
     else:
@@ -347,13 +400,222 @@ def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_v
     }
 
 
-def run_training_leave_one_out(cfg_path, 
+# 10 fold cross-validation
+# 10% for validation; 90% for training
+def run_training_10fold(cfg_path,
+                               regressor_type="GPR",
+                               encoder="PCA",
+                               fixed_encoder_hp=True,
+                               fixed_regressor_hp=True,
+                               return_validation=True,
+                               use_trained_pipeline=False,
+                               trained_pipeline=None,
+                               trained_decoder=None,
+                               mean_val=None,
+                               std_val=None,
+                               residual_variance=None):
+    # load data
+    X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
+    # split data for training and testing
+    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2)
+    # train model
+    training_info = run_training(X_train, Y_train_flat, regressor_type=regressor_type, kernel=kernel, pca_variance_ratio=pca_variance_ratio, encoder=encoder, vae_config=vae_config)
+    trained_pipeline, decoder, mean_val, std_val, n_components = training_info["trained_pipeline"], training_info["decoder"], training_info["mean_val"], training_info["std_val"], training_info["n_components_retained"]
+    trained_pipeline = joblib.load(trained_pipeline)
+    decoder = joblib.load(decoder)
+
+    if return_validation:
+        # compute validation metrics
+        validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
+        Y_pred_out, Y_true_out, r2_score = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["r2_score"]
+        # plotting for validation
+        r2_map = compute_r2_map(Y_true_out, Y_pred_out, lat_array, lon_array)
+        plot_r2_map_with_latlon(r2_map, lat_array=lat_array, lon_array=lon_array,  regressor_type= regressor_type,
+                                encoder=encoder, kernel=kernel, save_dir="outputs/logs")
+        print(f"[INFO] R² Score: {r2_score:.4f}")
+        print("[INFO] here we picked timesteps 0 1 2 3 999 for demonstration, edit the code if you want to see other timesteps")
+        for timestep in [0, 1, 2, 3, 999]:
+            plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array=lat_array, lon_array=lon_array, timestep=timestep, emulator_name= regressor_type,
+                encoder_name=encoder, kernel_name=kernel, save_folder="outputs/maps", title_suffix=f"Timestep {timestep}")
+
+    return {
+        "pipeline_model": trained_pipeline,
+        "decoder": decoder,
+        "encoder": encoder,
+        "r2_score": r2_score,
+        "n_components_retained": n_components,
+        "original_variable": var_name,
+        "spatial_shape": spatial_shape,
+        "Y_pred_out": Y_pred_out,
+        "Y_true_out": Y_true_out,
+        "X_test": X_test,
+        "encoder_used": encoder,
+        "regressor_type":  regressor_type
+    }
+
+
+def run_training_leave_one_out(cfg_path,
+                               regressor_type="GPR",
+                               encoder="PCA",
+                               fixed_encoder_hp=True,
+                               fixed_regressor_hp=False,
+                               return_validation=False):
+    import warnings
+    warnings.filterwarnings("ignore", category=ConvergenceWarning)
+    # load cfg
+    if isinstance(cfg_path, (str, Path)):
+        with open(cfg_path, "r") as fh:
+            cfg = yaml.safe_load(fh)
+    else:
+        cfg = cfg_path
+    emulator_name = cfg.get("emulators", "highlowmod_ice")
+
+    X, Y_flat, var_name, spatial_shape, lat, lon = load_training_data(cfg)
+    n_samples = X.shape[0]
+
+    Y_pred_full = []
+    Y_true_full = []
+    Y_var_full = []
+    rmse_full = []
+
+    time_start = time.time()
+    batch_size = 1  # Number of samples to leave out each time
+
+    # helper to index X/Y for pandas or numpy
+    def slice_X(Xobj, idx):
+        return Xobj.iloc[idx] if hasattr(Xobj, "iloc") else Xobj[idx, :]
+
+    # original behaviour: retrain for each leave-out
+    for i in range(0, n_samples, batch_size):
+        test_indices = np.arange(i, min(i + batch_size, n_samples))
+        train_indices = np.setdiff1d(np.arange(n_samples), test_indices)
+
+        X_train = slice_X(X, train_indices)
+        Y_train_flat = Y_flat[train_indices]
+        X_test = slice_X(X, test_indices)
+        Y_test_flat = Y_flat[test_indices]
+
+        training_info = run_training(cfg_path,
+                                     X_train,
+                                     Y_train_flat,
+                                     regressor_type=regressor_type,
+                                     encoder=encoder,
+                                     fixed_regressor_hp=fixed_regressor_hp,
+                                     fixed_encoder_hp=fixed_encoder_hp)
+
+        trained_pipeline_path = training_info["trained_pipeline"]
+        trained_decoder_path = training_info["decoder"]
+        mean_val = training_info["mean_val"]
+        std_val = training_info["std_val"]
+        residual_variance = training_info.get("residual_variance", None)
+        n_components = training_info["n_components_retained"]
+
+        trained_pipeline = joblib.load(trained_pipeline_path)
+        trained_decoder = joblib.load(trained_decoder_path)
+
+        validation_metrics = return_validation_function(
+            X_test,
+            Y_test_flat,
+            trained_pipeline,
+            trained_decoder,
+            mean_val,
+            std_val,
+            spatial_shape,
+            encoder,
+            residual_variance
+        )
+        Y_pred_out, Y_true_out, Y_var_out, rmse = (validation_metrics["Y_pred_out"],
+                                                  validation_metrics["Y_true_out"],
+                                                  validation_metrics["Y_var_out"],
+                                                  validation_metrics["rmse"])
+        Y_pred_full.extend(Y_pred_out)
+        Y_true_full.extend(Y_true_out)
+        Y_var_full.extend(Y_var_out)
+        rmse_full.append(rmse)
+        time_spt = time.time() - time_start
+        print(f"[TIME] {min(i + batch_size, n_samples)}/{n_samples} completed in {time_spt:.2f} seconds.")
+        time_start = time.time()
+
+    # stack and reshape
+    Y_pred_full = np.array(Y_pred_full)
+    Y_true_full = np.array(Y_true_full)
+    Y_var_full = np.array(Y_var_full)
+    rmse_full = np.array(rmse_full)
+
+    n = Y_pred_full.shape[0]
+    Y_pred_out_full = Y_pred_full.reshape(n, lat.shape[0], lon.shape[0])
+    Y_true_out_full = Y_true_full.reshape(n, lat.shape[0], lon.shape[0])
+    Y_var_out_full = Y_var_full.reshape(n, lat.shape[0], lon.shape[0]) if encoder == "PCA" else None
+
+    # Save NetCDFs
+    output_dir = cfg.get('output_dir', 'outputs/leave_one_out/')
+    os.makedirs(output_dir, exist_ok=True)
+    y_pred_path = os.path.join(output_dir, f"Y_pred_out_full_{emulator_name}.nc")
+    y_true_path = os.path.join(output_dir, f"Y_true_out_full_{emulator_name}.nc")
+    if os.path.exists(y_pred_path):
+        os.remove(y_pred_path)
+    if os.path.exists(y_true_path):
+        os.remove(y_true_path)
+
+    # debug global stats before saving
+    try:
+        print("[DIAG] SUMMARY before saving - Y_pred_out_full mean/min/max:", np.mean(Y_pred_out_full), np.min(Y_pred_out_full), np.max(Y_pred_out_full))
+        print("[DIAG] SUMMARY before saving - Y_true_out_full mean/min/max:", np.mean(Y_true_out_full), np.min(Y_true_out_full), np.max(Y_true_out_full))
+    except Exception:
+        pass
+
+    xr.Dataset({
+            "mean": (["time", "lat", "lon"], Y_true_out_full),
+            "latitude": (["lat"], lat),
+            "longitude": (["lon"], lon)
+        }).to_netcdf(y_true_path)
+
+    if encoder == "PCA":
+        xr.Dataset({
+            "mean": (["time", "lat", "lon"], Y_pred_out_full),
+            "variance": (["time", "lat", "lon"], Y_var_out_full),
+            "latitude": (["lat"], lat),
+            "longitude": (["lon"], lon)
+        }).to_netcdf(y_pred_path)
+    else:
+        xr.DataArray(Y_pred_out_full, dims=["time", "lat", "lon"]).to_netcdf(y_pred_path)
+
+    print(f"[INFO] Y_pred_out_full saved to {y_pred_path}")
+    print(f"[INFO] Y_true_out_full saved to {y_true_path}")
+
+    if return_validation:
+        plot_histogram_4_leave1out(Y_true_out_full, Y_pred_out_full)
+
+    time_spt = time.time() - time_start
+    print(f"[TIME] plot completed in {time_spt:.2f} seconds.")
+
+    try:
+        overall_r2 = r2_score(Y_true_out_full.flatten(), Y_pred_out_full.flatten())
+    except Exception:
+        overall_r2 = None
+
+    return {
+        "r2_score": overall_r2,
+        "n_components_retained": n_components,
+        "original_variable": var_name,
+        "spatial_shape": spatial_shape,
+        "Y_pred_out": Y_pred_out_full,
+        "Y_true_out": Y_true_out_full,
+        "Y_var_out": Y_var_out_full,
+        "encoder_used": encoder,
+        "regressor_type": regressor_type
+    }
+
+def run_training_leave_one_out_old(cfg_path, 
                                regressor_type="GPR", 
                                encoder="PCA", 
                                fixed_encoder_hp=True, 
-                               fixed_regressor_hp=True, 
-                               return_validation=True):
-    
+                               fixed_regressor_hp=False, 
+                               return_validation=False):
+    import warnings
+    # Suppress ConvergenceWarning during the execution of this function
+    warnings.filterwarnings("ignore", category=ConvergenceWarning)
+
     # if caller passed a path, load YAML to dict; if already a dict, use it directly
     if isinstance(cfg_path, (str, Path)):
         with open(cfg_path, "r") as fh:
@@ -446,6 +708,13 @@ def run_training_leave_one_out(cfg_path,
     if os.path.exists(y_true_path):
         os.remove(y_true_path)
 
+    # debug global stats before saving
+    try:
+        print("[DIAG] SUMMARY before saving - Y_pred_out_full mean/min/max:", np.mean(Y_pred_out_full), np.min(Y_pred_out_full), np.max(Y_pred_out_full))
+        print("[DIAG] SUMMARY before saving - Y_true_out_full mean/min/max:", np.mean(Y_true_out_full), np.min(Y_true_out_full), np.max(Y_true_out_full))
+    except Exception:
+        pass
+
     xr.Dataset({
             "mean": (["time", "lat", "lon"], Y_true_out_full),
             "latitude": (["lat"], lat),
@@ -482,48 +751,6 @@ def run_training_leave_one_out(cfg_path,
         "Y_var_out": Y_var_out_full,
         "encoder_used": encoder,
         "regressor_type": regressor_type
-    }
-
-# 10 fold cross-validation
-# 10% for validation; 90% for training
-def run_training_10fold(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, return_validation=True):
-    # load data
-    X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
-    # split data for training and testing
-    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2)
-    # train model
-    training_info = run_training(X_train, Y_train_flat, regressor_type=regressor_type, kernel=kernel, pca_variance_ratio=pca_variance_ratio, encoder=encoder, vae_config=vae_config)
-    trained_pipeline, decoder, mean_val, std_val, n_components = training_info["trained_pipeline"], training_info["decoder"], training_info["mean_val"], training_info["std_val"], training_info["n_components_retained"]
-    trained_pipeline = joblib.load(trained_pipeline)
-    decoder = joblib.load(decoder)
-
-    if return_validation:
-        # compute validation metrics
-        validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
-        Y_pred_out, Y_true_out, r2_score = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["r2_score"]
-        # plotting for validation
-        r2_map = compute_r2_map(Y_true_out, Y_pred_out, lat_array, lon_array)
-        plot_r2_map_with_latlon(r2_map, lat_array=lat_array, lon_array=lon_array,  regressor_type= regressor_type,
-                                encoder=encoder, kernel=kernel, save_dir="outputs/logs")
-        print(f"[INFO] R² Score: {r2_score:.4f}")
-        print("[INFO] here we picked timesteps 0 1 2 3 999 for demonstration, edit the code if you want to see other timesteps")
-        for timestep in [0, 1, 2, 3, 999]:
-            plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array=lat_array, lon_array=lon_array, timestep=timestep, emulator_name= regressor_type,
-                encoder_name=encoder, kernel_name=kernel, save_folder="outputs/maps", title_suffix=f"Timestep {timestep}")
-
-    return {
-        "pipeline_model": trained_pipeline,
-        "decoder": decoder,
-        "encoder": encoder,
-        "r2_score": r2_score,
-        "n_components_retained": n_components,
-        "original_variable": var_name,
-        "spatial_shape": spatial_shape,
-        "Y_pred_out": Y_pred_out,
-        "Y_true_out": Y_true_out,
-        "X_test": X_test,
-        "encoder_used": encoder,
-        "regressor_type":  regressor_type
     }
 
 
@@ -613,14 +840,21 @@ def run_training_LGBM_optimization(cfg_path, encoder="PCA", regressor="LGBM", fi
         "best_r2_score": study.best_value
     }
 
-
-def run_training_GPR_optimization(cfg_path, encoder="PCA", regressor="GPR", fixed_encoder_hp=True, fixed_regressor_hp=False,save_log=True):
+def run_training_GPR_optimization(cfg_path, encoder="PCA", regressor="GPR", fixed_encoder_hp=True, fixed_regressor_hp=False, save_log=True, do_leaveoneout=True, return_validation=False):
     """
-    This function is to perform hyperparameter optimization for GPR using GridSearchCV.
-    It returns the best model found during the search.
-    Use PCA as encoder.
+    To be deleted.
+    1. optimaze GPR hyperparameters for every PC.
+    2. let MultiOutputRegressor to do the multi-output fitting instead of giving fixed hyperparameters for every PC (proved to cause poor performance).
+
+    This function is to perform hyperparameter optimization for GPR using Optuna.
+    If do_leaveoneout=True the trained pipeline will be used to generate leave-one-out style outputs (no retraining).
     """
     import matplotlib.pyplot as plt
+    import optuna
+    import optuna.visualization as vis
+    from sklearn.gaussian_process.kernels import RBF, Matern, RationalQuadratic, WhiteKernel, ConstantKernel as C
+    import warnings
+    from sklearn.exceptions import ConvergenceWarning
 
     with open(cfg_path, 'r') as file:
         cfg = yaml.safe_load(file) or {}
@@ -638,113 +872,68 @@ def run_training_GPR_optimization(cfg_path, encoder="PCA", regressor="GPR", fixe
     )
     latent_dim = Y_train_encoded.shape[1]
 
-    if fixed_regressor_hp:
-        print("[INFO] Using fixed hyperparameters for GPR.")
-        GPR = build_regressor(
-            cfg_path=cfg_path,
-            regressor_type="GPR",
-            encoder=encoder,
-            fixed_regressor_hp=True)
-    else:
-        print("[INFO] Starting hyperparameter optimization for GPR...")
-        print("[INFO] Find the best kernel and hyperparameters using Optuna.")
-        import optuna
-        import optuna.visualization as vis
-        from sklearn.gaussian_process.kernels import RBF, Matern, RationalQuadratic, WhiteKernel, ConstantKernel as C
 
-        def objective(trial):
-            # sample a scalar length_scale (safer than per-feature vectors which can mismatch kernel bounds)
-            kernel_name = trial.suggest_categorical("kernel", ["RBF_White", "Matern_White"]) #, "RBF", "Matern", "RationalQuadratic"])
-            # per-feature ARD length-scales (one param per input feature)
+    print("[INFO] Starting hyperparameter optimization for GPR...")
+    print("[INFO] Find the best kernel and hyperparameters using Optuna.")
+
+    def objective(trial):
+        # Suppress ConvergenceWarning during optimization
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ConvergenceWarning)
+
+            kernel_name = "RBF_White"  # fix to RBF+White for faster optimization
             n_features = X_train.shape[1]
             length_scales_array = np.array([
-                trial.suggest_float(f"length_scale_{j}", 1e-3, 1e2, log=True)
+                trial.suggest_float(f"length_scale_{j}", 1e-3, 1e3, log=True)
                 for j in range(n_features)
             ])
-            noise_level = trial.suggest_float("noise_level", 1e-2, 1e2, log=True)
-            nu = trial.suggest_categorical("nu", [1.5, 2.5])
+            noise_level = trial.suggest_float("noise_level", 1e-1, 1e2, log=True)
             nugget_value = trial.suggest_float("nugget", 1e-6, 1e-1, log=True)
             constant_value = trial.suggest_float("constant_value", 1e-3, 1e0, log=True)
-            n_restarts_optimizer = trial.suggest_int("n_restarts_optimizer", 1, 5)
+            n_restarts_optimizer = 5  # fix to 5 for faster optimization
 
-            if kernel_name == "RBF":
-                kernel = C(constant_value) * RBF(length_scale=length_scales_array)
-            elif kernel_name == "RBF_White":
+            if kernel_name == "RBF_White":
                 kernel = C(constant_value) * RBF(length_scale=length_scales_array) + WhiteKernel(noise_level=noise_level)
-            elif kernel_name == "Matern":
-                kernel = C(constant_value) * Matern(length_scale=length_scales_array, nu=nu)
             elif kernel_name == "Matern_White":
+                nu = trial.suggest_categorical("nu", [1.5, 2.5])
                 kernel = C(constant_value) * Matern(length_scale=length_scales_array, nu=nu) + WhiteKernel(noise_level=noise_level)
-            elif kernel_name == "RationalQuadratic":
-                kernel = C(constant_value) * RationalQuadratic(length_scale=length_scales_array, alpha=nugget_value) + WhiteKernel(noise_level=noise_level)
 
-            # smaller restarts for stability during search
             GPR = GaussianProcessRegressor(kernel=kernel, alpha=nugget_value, n_restarts_optimizer=n_restarts_optimizer, random_state=42, normalize_y=True)
             model = MultiOutputRegressor(GPR)
             try:
-                scores = cross_val_score(model, X_train, Y_train_encoded, cv=4, scoring="neg_mean_squared_error", n_jobs=1)
+                scores = cross_val_score(model, X_train, Y_train_encoded, cv=10, scoring="neg_mean_squared_error", n_jobs=1)
                 return scores.mean()
             except Exception:
-                # 标记为被修剪（pruned）
                 raise optuna.exceptions.TrialPruned()
 
-        # prefer maximize because we return neg_mean_squared_error (larger is better)
-        study = optuna.create_study(direction="maximize")
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=10, n_jobs=1)
 
-        def callback(study, trial):
-            completed_trials = len(study.trials)
-            total_trials = 40  # Set this to the same value as n_trials
-            print(f"[OPTUNA] Trial {completed_trials}/{total_trials} completed.")
+    if save_log:
+        output_dir = cfg['log_path'] if 'log_path' in cfg else "examples/logs"
+        os.makedirs(output_dir, exist_ok=True)
+        vis.plot_optimization_history(study).write_image(os.path.join(output_dir, "gpr_optimization_history.png"))
+        vis.plot_parallel_coordinate(study).write_image(os.path.join(output_dir, "gpr_parallel_coordinate.png"))
+        vis.plot_param_importances(study).write_image(os.path.join(output_dir, "gpr_param_importances.png"))
+        vis.plot_slice(study).write_image(os.path.join(output_dir, "gpr_slice_plot.png"))
+        vis.plot_contour(study).write_image(os.path.join(output_dir, "gpr_contour_plot.png"))
+        print(f"[INFO] GPR Optimization plots saved to {output_dir}")
 
-        study.optimize(objective, n_trials=40, n_jobs=1, callbacks=[callback])
+    best = study.best_params
+    kernel_name = best.pop("kernel", "RBF_White")
+    n_features = X_train.shape[1]
+    best_length_scales = [best.pop(f"length_scale_{j}") for j in range(n_features)]
 
-        print(f"[OPTUNA] best params: {study.best_params}, best score: {study.best_value:.5f}")
-        best = study.best_params
-        kernel_name = best.pop("kernel")
-        # rebuild length_scale vector
-        n_features = X_train.shape[1]
-        best_length_scales = [best.pop(f"length_scale_{j}") for j in range(n_features)]
-        print(f"[OPTUNA] best length_scales: {best_length_scales}")
-
-        # build final GPR with best scalar length_scale
-        if kernel_name == "RBF":
-            GPR = GaussianProcessRegressor(
-                kernel=C(best["constant_value"]) * RBF(length_scale=best_length_scales),
-                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
-            )
-        elif kernel_name == "RBF_White":
-            GPR = GaussianProcessRegressor(
-                kernel=C(best["constant_value"]) * RBF(length_scale=best_length_scales) +
-                       WhiteKernel(noise_level=best["noise_level"]),
-                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
-            )
-        elif kernel_name == "Matern":
-            GPR = GaussianProcessRegressor(
-                kernel=C(best["constant_value"]) * Matern(length_scale=best_length_scales, nu=best["nu"]),
-                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
-            )
-        elif kernel_name == "Matern_White":
-            GPR = GaussianProcessRegressor(
-                kernel=C(best["constant_value"]) * Matern(length_scale=best_length_scales, nu=best["nu"]) +
-                       WhiteKernel(noise_level=best["noise_level"]),
-                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
-            )
-        elif kernel_name == "RationalQuadratic":
-            GPR = GaussianProcessRegressor(
-                kernel=C(best["constant_value"]) * RationalQuadratic(length_scale=best_length_scales, alpha=best["alpha"]) +
-                       WhiteKernel(noise_level=best["noise_level"]),
-                alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
-            )
-
-        if save_log:
-            output_dir = cfg['log_path'] if 'log_path' in cfg else "examples/logs"
-            os.makedirs(output_dir, exist_ok=True)
-            vis.plot_optimization_history(study).write_image(os.path.join(output_dir, "GPR_optimization_history.png"))
-            vis.plot_parallel_coordinate(study).write_image(os.path.join(output_dir, "GPR_parallel_coordinate.png"))
-            vis.plot_param_importances(study).write_image(os.path.join(output_dir, "GPR_param_importances.png"))
-            vis.plot_slice(study).write_image(os.path.join(output_dir, "GPR_slice_plot.png"))
-            vis.plot_contour(study).write_image(os.path.join(output_dir, "GPR_contour_plot.png"))
-    
+    if kernel_name == "RBF_White":
+        GPR = GaussianProcessRegressor(
+            kernel=C(best["constant_value"]) * RBF(length_scale=best_length_scales) + WhiteKernel(noise_level=best["noise_level"]),
+            alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
+        )
+    elif kernel_name == "Matern_White":
+        GPR = GaussianProcessRegressor(
+            kernel=C(best["constant_value"]) * Matern(length_scale=best_length_scales, nu=best["nu"]) + WhiteKernel(noise_level=best["noise_level"]),
+            alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
+        )
 
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
@@ -753,12 +942,31 @@ def run_training_GPR_optimization(cfg_path, encoder="PCA", regressor="GPR", fixe
 
     pipeline.fit(X_train, Y_train_encoded)
 
-    print(f"[INFO] Best R² score from CV: {-study.best_value:.4f}")
+    print(f"[INFO] Best CV objective (neg_mse-based): {-study.best_value:.4f}" if study is not None else "[INFO] Trained with fixed hyperparams")
 
     best_model = pipeline
 
+    # if requested, generate leave-one-out style outputs using the trained pipeline (no retraining)
+    if do_leaveoneout:
+        loo_res = run_training_leave_one_out(cfg_path,
+                                            regressor_type=regressor,
+                                            encoder=encoder,
+                                            fixed_encoder_hp=fixed_encoder_hp,
+                                            fixed_regressor_hp=False,
+                                            return_validation=return_validation)
+        out = {
+            "best_model": best_model,
+            "best_params": study.best_params if study is not None else {},
+            "best_r2_score": study.best_value if study is not None else None
+        }
+        out.update({k: loo_res.get(k) for k in ("Y_pred_out", "Y_true_out", "Y_var_out", "r2_score")})
+        return out
+
+    print(f"[OPTUNA] best params: {study.best_params}, best score: {study.best_value:.5f}")
+
     return {
         "best_model": best_model,
-        "best_params": study.best_params,
-        "best_r2_score": study.best_value
+        "best_params": study.best_params if study is not None else {},
+        "best_r2_score": study.best_value if study is not None else None
     }
+

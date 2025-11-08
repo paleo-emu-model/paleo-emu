@@ -27,7 +27,8 @@ def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regress
         if fixed_regressor_hp:
             # set fixed hyperparameters
             # Load hyperparameters from emulator.yaml
-            print("[INFO] Using fixed hyperparameters for GPR from YAML configuration.")
+            print("[INFO] Using fixed hyperparameters range for GPR from YAML configuration.")
+            print("[INFO] Dont fix the hyperparameters, because different PCs may need different hyperparameters.")
             kernel_name = cfg['GPR_config'][encoder]['kernel']
             nugget_value = cfg['GPR_config'][encoder]['nugget_value']
             length_scales = cfg['GPR_config'][encoder]['length_scales']
@@ -37,7 +38,6 @@ def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regress
             nu = cfg['GPR_config'][encoder].get('nu', 1.5)
             constant_value = cfg['GPR_config'][encoder].get('constant_value', 1.0)
             constant_value_bounds = (constant_value * 0.1, constant_value * 10.0) # allow small range of constant value tuning
-
             # coerce types
             try:
                 nugget_value = float(nugget_value)
@@ -58,20 +58,15 @@ def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regress
                 kernel = C(constant_value, constant_value_bounds) * Matern(length_scale=length_scales, nu=nu)
             elif kernel_name == "Matern_White":
                 kernel = C(constant_value, constant_value_bounds) * Matern(length_scale=length_scales, nu=nu) + WhiteKernel(noise_level=noise_level)
-            elif kernel_name == "RationalQuadratic":
-                kernel = C(constant_value, constant_value_bounds) * RationalQuadratic(length_scale=length_scales, alpha=alpha) + WhiteKernel(noise_level=noise_level)
-            elif kernel_name == "ConstantKernel":
-                kernel = C(constant_value, constant_value_bounds) * RBF(length_scale=length_scales)
-            elif kernel_name == "WhiteKernel":
-                kernel = WhiteKernel(noise_level=noise_level)
             else:
                 raise ValueError(f"[ERROR] Unsupported kernel name: {kernel_name}. Create kernel manually.")
+            
             regressor = GaussianProcessRegressor(
                 kernel=kernel,
-                alpha=nugget_value,  # 使用 alpha 参数设置 nugget
-                optimizer="fmin_l_bfgs_b",      # 打开优化器
-                n_restarts_optimizer=n_restarts_optimizer,
-                normalize_y=False,
+                alpha=nugget_value,  # using alpha parameter to set nugget
+                optimizer="fmin_l_bfgs_b",      # still use optimizer to fine-tune hyperparameters
+                n_restarts_optimizer=n_restarts_optimizer, 
+                normalize_y=True,
                 copy_X_train=True
             )
         elif fixed_regressor_hp == "old_R_emulator":
@@ -93,12 +88,17 @@ def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regress
                 copy_X_train=True
             )
         else:
-            print("[INFO] Using default GPR hyperparameters with optimization.")
-            print("[INFO] For proper hyperparameter tuning, using run_training_GPR_optimization.")
-            print("[INFO] Default kernel: RBF with length_scale=1.0 and nugget=0.0")
-            n_restarts_optimizer = 5
-            kernel = RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3))
-            regressor = GaussianProcessRegressor(kernel=kernel, alpha=1e-6, n_restarts_optimizer=n_restarts_optimizer, random_state=42, normalize_y=True)
+            print("[INFO] Using GPR optimization with chosen range for hyperparameters.")
+            # use WhiteKernel rather than alpha nugget for numerical stability
+            # XY has been normalized, so ConstantKernel is not necessary here
+            n_restarts_optimizer = 12
+            kernel = RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1.0, noise_level_bounds=(1e-6, 1e1))
+            regressor = GaussianProcessRegressor(
+                kernel=kernel,
+                n_restarts_optimizer=n_restarts_optimizer,  # n_restarts_optimizer can be set higher for better optimization
+                random_state=42,
+                normalize_y=True
+            )
             if verbose:
                 print(f"[GPR] init kernel={regressor.kernel} | restarts={n_restarts_optimizer}")
 
