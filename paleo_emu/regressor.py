@@ -10,7 +10,10 @@ from sklearn.gaussian_process.kernels import (
     ConstantKernel as C, WhiteKernel
 )
 from lightgbm import LGBMRegressor
+from sklearn.model_selection import RandomizedSearchCV
 import yaml
+import numpy as np
+from sklearn.base import BaseEstimator, RegressorMixin, clone
 
 def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regressor_hp=True, verbose=True):
         # accept either a dict (already parsed) or a path to a yaml file
@@ -103,12 +106,12 @@ def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regress
                 print(f"[GPR] init kernel={regressor.kernel} | restarts={n_restarts_optimizer}")
 
     elif regressor_type == "LGBM":
+        import warnings
+        warnings.filterwarnings("ignore", message=".*valid feature names.*", category=UserWarning)
         if fixed_regressor_hp:
             print("[INFO] Using fixed hyperparameters for LGBMRegressor.")
             # Load hyperparameters from emulator.yaml
-            with open(cfg_path, 'r') as file:
-                config = yaml.safe_load(file)
-            lgbm_params = config['LGBM_config'][encoder]
+            lgbm_params = cfg['LGBM_config'][encoder]
             print(f"[INFO] Loaded LGBM hyperparameters: {lgbm_params}")
             regressor = LGBMRegressor(
                 n_estimators=lgbm_params['n_estimators'],
@@ -123,19 +126,54 @@ def build_regressor(cfg_path, regressor_type="GPR", encoder="PCA", fixed_regress
                 verbosity=-1
             )
         else:
-            print("[INFO] Using default LGBMRegressor hyperparameters.")
-            print("[INFO] For proper hyperparameter tuning, using run_training_LGBM_optimization.")
-            regressor = LGBMRegressor(
-                n_estimators=100,
-                learning_rate=0.1,
-                num_leaves=31,
-                max_depth=-1,
-                random_state=42,
-                n_jobs=-1,
-                verbosity=-1
-            )
+            print("[INFO] Using LGBM optimization.")
+            print("[INFO] Note: it will take long time if dataset is large.")
+            # load search settings from config if present
+            lgbm_cfg = cfg.get('LGBM_config', {}).get(encoder, {}) if cfg else {}
+            # stronger-regularization defaults: smaller trees, more min samples per leaf,
+            # L1/L2 penalties, feature/row subsampling and modest learning rate.
+            param_distributions = lgbm_cfg.get('param_distributions', {
+                # model capacity (small because few samples)
+                'num_leaves': [8, 12, 16, 24, 32],
+                'max_depth': [3, 4, 6],
+                # learning / ensemble size (conservative)
+                'learning_rate': [0.001, 0.005, 0.01, 0.03],
+                'n_estimators': [100, 200, 400, 800],
+                # row/feature subsampling to reduce overfit
+                'subsample': [0.6, 0.7, 0.8, 1.0],
+                'colsample_bytree': [0.5, 0.6, 0.7, 0.8],
+                'feature_fraction': [0.5, 0.6, 0.7, 0.8],
+                'bagging_fraction': [0.6, 0.8, 1.0],
+                'bagging_freq': [0, 1, 5],
+                # leaf / split constraints (increase min samples per leaf)
+                'min_child_samples': [10, 20, 30, 50],
+                # regularization penalties (favor some L2)
+                'lambda_l1': [0.0, 0.01, 0.1, 1.0],
+                'lambda_l2': [0.0, 0.5, 1.0, 5.0],
+                # require minimum gain to split (avoid tiny noisy splits)
+                'min_gain_to_split': [0.0, 0.01, 0.05, 0.1],
+            })
+            # search budget & CV
+            n_iter = int(lgbm_cfg.get('n_iter', 20))    # increase if you can afford time (30-100)
+            cv = int(lgbm_cfg.get('cv', 4))             # with 120 samples 4 or 5 folds is reasonable
+            random_state = int(lgbm_cfg.get('random_state', 42))
 
+            base_lgb = LGBMRegressor(random_state=random_state, verbosity=-1)
+            # Use RandomizedSearchCV so that when cloned for each output it will tune per‑PC on that PC's training data.
+            # IMPORTANT: set n_jobs=1 here to avoid nested parallelism when outer code also parallelizes.
+            search = RandomizedSearchCV(
+                estimator=base_lgb,
+                param_distributions=param_distributions,
+                n_iter=n_iter,
+                cv=cv,
+                scoring='neg_mean_squared_error',
+                random_state=random_state,
+                n_jobs=1,
+                verbose=0
+            )
+            regressor = search
     else:
         raise ValueError("[ERROR] regressor_type must be either 'GPR' or 'LGBM'.")
 
     return regressor
+

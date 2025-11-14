@@ -46,84 +46,19 @@ from paleo_emu.plotting import plot_r2_map_with_latlon, plot_prediction_maps_wit
 from paleo_emu.validation import compute_r2_map
 
 
-
-def _kernel_diag(gpr: GaussianProcessRegressor, bounds_tol=0.05):
-    k = gpr.kernel_
-    lml = gpr.log_marginal_likelihood_value_
-    info = {"lml": lml, "hit_bounds": False}
-    # 提取 length_scale
-    try:
-        if hasattr(k, "k1") and hasattr(k, "k2"):
-            # 展开组合核 (Constant * (RBF  White)) 等
-            parts = [k.k1, k.k2]
-        else:
-            parts = [k]
-        length_scales = []
-        bounds = []
-        for p in parts:
-            if hasattr(p, "length_scale"):
-                ls = p.length_scale
-                length_scales.append(ls)
-                if hasattr(p, "length_scale_bounds"):
-                    bounds.append(p.length_scale_bounds)
-        flat_ls = []
-        flat_lb = []
-        flat_ub = []
-        for ls, b in zip(length_scales, bounds):
-            ls_arr = ls if hasattr(ls, "__len__") else [ls]
-            lb, ub = b
-            lb_arr = lb if hasattr(lb, "__iter__") else [lb]*len(ls_arr)
-            ub_arr = ub if hasattr(ub, "__iter__") else [ub]*len(ls_arr)
-            flat_ls.extend(ls_arr)
-            flat_lb.extend(lb_arr)
-            flat_ub.extend(ub_arr)
-        hit = False
-        for v, lo, hi in zip(flat_ls, flat_lb, flat_ub):
-            span = hi - lo
-            if span > 0:
-                if (v - lo) / span < bounds_tol or (hi - v) / span < bounds_tol:
-                    hit = True
-                    break
-        info["hit_bounds"] = hit
-        info["n_length_scales"] = len(flat_ls)
-    except Exception:
-        pass
-    return info
-
-def diagnose_pcs(pca_model, reg_wrap):
-    from sklearn.gaussian_process import GaussianProcessRegressor
-    if not (hasattr(reg_wrap, "estimators_") and hasattr(pca_model, "explained_variance_ratio_")):
-        return
-    ratios = pca_model.explained_variance_ratio_
-    rows = []
-    for i, est in enumerate(reg_wrap.estimators_):
-        if isinstance(est, GaussianProcessRegressor):
-            k = str(est.kernel_)
-            noise = None
-            const = None
-            if "noise_level=" in k:
-                try: noise = float(k.split("noise_level=")[1].split(")")[0])
-                except: pass
-            if "ConstantKernel(" in k:
-                try: const = float(k.split("ConstantKernel(")[1].split("**2")[0])
-                except: pass
-            rows.append((i, ratios[i], est.log_marginal_likelihood_value_, const, noise))
-    print("PC | ratio     | LML       | const     | noise")
-    for i,r,lml,c,n in rows:
-        print(f"{i:2d} | {r:9.6f} | {lml:9.3f} | {c} | {n}")
-    best = max(r[2] for r in rows)
-    weak = [i for i,r,lml,c,n in rows if lml < best - 80]
-    if weak:
-        print(f"[INFO] weak PCs (LML < best-80): {weak}")
-
-
 def run_training(cfg_path, X_train, Y_train, regressor_type="GPR", encoder="PCA",
-                 fixed_regressor_hp=False, fixed_encoder_hp=True):
+                 fixed_regressor_hp=False, fixed_encoder_hp=True,
+                 save_path="examples/outputs/emulator_saved",
+                 save_name="emulator_model",
+                 save_pipeline=False):
     # training for given data
     """
     X_training: (n_samples, 5) the input feature matrix
     Y_training: (n_samples, lat*lon) the flattened output matrix
     """
+    if X_train is None or Y_train is None:
+        X_train, Y_train, _, _, lat_array, lon_array = load_training_data(cfg_path)
+
     Y_train_encoded, decoder, mean_val, std_val, residual_variance = encode(
         Y_train,
         encoder=encoder,
@@ -132,54 +67,68 @@ def run_training(cfg_path, X_train, Y_train, regressor_type="GPR", encoder="PCA"
     )
     latent_dim = Y_train_encoded.shape[1]
 
+    print(f"[DIAG] Y_train_encoded shape: {Y_train_encoded.shape}")
+    print("[DIAG] Y_train_encoded per-PC mean/std (first 10):")
+
     regressor = build_regressor(
-        cfg_path=cfg_path,
-        regressor_type=regressor_type,
-        encoder=encoder,
-        fixed_regressor_hp=fixed_regressor_hp,
-        verbose=verbose
+            cfg_path=cfg_path,
+            regressor_type=regressor_type,
+            encoder=encoder,
+            fixed_regressor_hp=fixed_regressor_hp,
+            verbose=verbose
     )
 
-    pipeline = Pipeline([
+    reg_step = MultiOutputRegressor(regressor)
+
+    model = Pipeline([
         ("scaler", StandardScaler()),
-        ("regressor", MultiOutputRegressor(regressor))
+        ("regressor", reg_step)
     ])
 
-    pipeline.fit(X_train, Y_train_encoded)
-
-    # **************diagnostics********************
-    if regressor_type == "GPR":
-        reg_wrap = pipeline.named_steps.get("regressor")
-        if isinstance(reg_wrap, MultiOutputRegressor):
-            lmls = []
-            hit_bounds = 0
-            for est in reg_wrap.estimators_:
-                if isinstance(est, GaussianProcessRegressor):
-                    d = _kernel_diag(est)
-                    lmls.append(d["lml"])
-                    hit_bounds = int(d["hit_bounds"])
-            if lmls:
-                print(f"[GPR-DIAG] outputs={len(lmls)} "
-                      f"LML(mean)={np.mean(lmls):.3f} LML(max)={np.max(lmls):.3f} "
-                      f"hit_bounds={hit_bounds}/{len(lmls)}")
-        elif isinstance(reg_wrap, GaussianProcessRegressor):
-            d = _kernel_diag(reg_wrap)
-            print(f"[GPR-DIAG] single LML={d['lml']:.3f} hit_bounds={d['hit_bounds']}")
-        if encoder == "PCA":
-            diagnose_pcs(decoder, reg_wrap)
-    # **********************************
-
-    # save the trained pipeline
-    joblib.dump(pipeline, "pipeline.joblib")
-    # save the decoder
-    joblib.dump(decoder, "decoder.joblib")
+    model.fit(X_train, Y_train_encoded)
     
+    # **********************************
+    model_joblib_name = os.path.join(save_path, f"{save_name}.joblib")
+
+    meta = {
+        "pipeline_path": model_joblib_name,
+        "encoder": encoder,
+        "regressor_type": regressor_type,
+        "n_components_retained": latent_dim,
+        "mean_val": mean_val,
+        "std_val": std_val,
+        "lat_array": lat_array,
+        "lon_array": lon_array,
+        "spatial_shape": spatial_shape
+    }
+
+    data_to_save = {
+    "model": model,
+    "decoder": decoder,
+    "meta": meta
+    }
+
+    pipeline_joblib_name = os.path.join(save_path, f"{save_name}_pipeline.joblib")
+    # 一次性保存到文件
+    joblib.dump(data_to_save, pipeline_joblib_name)
+
+    if save_pipeline:
+        # Ensure the save path exists
+        os.makedirs(save_path, exist_ok=True)
+        # Save metadata as a YAML file
+        meta_path = os.path.join(save_path, f"{save_name}.yaml")
+        with open(meta_path, "w") as fh:
+            yaml.safe_dump(meta, fh)
+        print(f"[INFO] Metadata saved to {meta_path}")
+
     return {
-        "trained_pipeline": "pipeline.joblib",
-        "decoder": "decoder.joblib",
+        "trained_pipeline": pipeline_joblib_name,
+        "decoder": pipeline_joblib_name,
         "encoder": encoder,
         "mean_val": mean_val,
         "std_val": std_val, 
+        "lat_array": lat_array,
+        "lon_array": lon_array,
         "residual_variance": residual_variance,
         "n_components_retained": latent_dim,
         "regressor_type": regressor_type}
@@ -195,22 +144,15 @@ def return_validation_function(X_test, Y_true_flat, trained_pipeline, decoder, m
             r2_score: R² score of the prediction
             rmse: RMSE of the prediction
     """
-    import numpy as np
+    import pandas as pd
     # normalize inputs and ensure numeric arrays
-    X_test = np.asarray(X_test)
+    # keep original X_test (may be DataFrame) for possible feature-name reconstruction,
+    # but also keep ndarray view used for numerical ops
+    X_test_raw = X_test
+    X_test = np.asarray(X_test_raw)
     Y_true_flat = np.asarray(Y_true_flat, dtype=float)
     mean_val = np.asarray(mean_val, dtype=float)
     std_val = np.asarray(std_val, dtype=float)
-
-    # quick debug prints (show shapes and first elements)
-    print("[DEBUG] X_test shape:", getattr(X_test, "shape", None))
-    print("[DEBUG] Y_true_flat shape:", getattr(Y_true_flat, "shape", None))
-    print("[DEBUG] mean_val shape:", mean_val.shape, "mean_val[0:3]:", mean_val.ravel()[:3])
-    print("[DEBUG] std_val shape:", std_val.shape, "std_val[0:3]:", std_val.ravel()[:3])
-    try:
-        print("[DEBUG] Y_true_flat global mean:", float(np.mean(Y_true_flat)))
-    except Exception:
-        pass
 
     # Actually no need to encode and decode Y_true here,
     # this extra processing steps is to ensure the consistency of the processing for Y
@@ -275,17 +217,78 @@ def return_validation_function(X_test, Y_true_flat, trained_pipeline, decoder, m
     if mean_encoded is not None:
         Y_pred_encoded = mean_encoded
     else:
-        Y_pred_encoded = trained_pipeline.predict(X_test)
+        # Try to present the same feature-name layout used in training to the LGBM estimators:
+        # If any underlying estimator has booster_.feature_name(), build a DataFrame with those names.
+        X_for_pred = X_test
+        try:
+            reg = None
+            if hasattr(trained_pipeline, "named_steps"):
+                reg = trained_pipeline.named_steps.get("regressor", trained_pipeline)
+            else:
+                reg = trained_pipeline
+            # locate underlying estimators (MultiOutputRegressor / custom MultiEstimator / single estimator)
+            ests = getattr(reg, "estimators_", None) or getattr(reg, "estimators", None) or [reg]
+            feat_names = None
+            for e in ests:
+                b = getattr(e, "booster_", None)
+                if b is not None:
+                    try:
+                        feat_names = b.feature_name()
+                        if feat_names:
+                            break
+                    except Exception:
+                        feat_names = None
+            if feat_names is not None:
+                # if original X was DataFrame and contains the same names, reuse subset; else build DataFrame
+                if isinstance(X_test_raw, pd.DataFrame):
+                    if all(fn in X_test_raw.columns for fn in feat_names):
+                        X_for_pred = X_test_raw.loc[:, feat_names]
+                    else:
+                        X_for_pred = pd.DataFrame(X_test, columns=feat_names)
+                else:
+                    X_for_pred = pd.DataFrame(X_test, columns=feat_names)
+        except Exception:
+            X_for_pred = X_test
+
+        Y_pred_encoded = trained_pipeline.predict(X_for_pred)
     # DIAGNOSTIC: check encoded → decoded → unscale chain
     try:
         print("[DIAG] Y_pred_encoded shape/mean/std:", getattr(Y_pred_encoded, 'shape', None), np.mean(Y_pred_encoded), np.std(Y_pred_encoded))
-        # if we have access to training encoded stats, try to compare (best-effort)
-        if hasattr(decoder, "n_components_"):
-            print("[DIAG] decoder.n_components_:", decoder.n_components_)
-        if hasattr(decoder, "components_"):
-            print("[DIAG] decoder.components_.shape:", decoder.components_.shape)
+        from sklearn.metrics import mean_squared_error
+        encoded_rmse = np.sqrt(mean_squared_error(Y_true_encoded, Y_pred_encoded))
+        print(f"[DIAG] Encoded-space RMSE: {encoded_rmse:.3f}")
     except Exception:
         pass
+
+    # ---------- 插入：逐 PC 重建误差贡献 & 比例 ----------
+    try:
+        if encoder == "PCA" and ('Y_true_encoded' in locals()) and (Y_pred_encoded is not None):
+            y_true_enc = np.asarray(Y_true_encoded).reshape(1, -1)
+            y_pred_enc = np.asarray(Y_pred_encoded).reshape(1, -1)
+            # full decoded (std-space -> then unscale below)
+            dec_true_std = decoder.inverse_transform(y_true_enc)
+            dec_pred_std = decoder.inverse_transform(y_pred_enc)
+            dec_true = dec_true_std * std_val + mean_val
+            dec_pred = dec_pred_std * std_val + mean_val
+            total_spatial_rmse = np.sqrt(np.mean((dec_pred - dec_true)**2))
+            # per-PC contributions: apply only the difference on each PC and decode
+            npc = y_true_enc.shape[1]
+            per_pc_rmse = []
+            for pc in range(npc):
+                delta_pc = np.zeros_like(y_true_enc)
+                delta_pc[0, pc] = (y_pred_enc - y_true_enc)[0, pc]
+                dec_delta_std = decoder.inverse_transform(delta_pc)   # std-space change
+                dec_delta = dec_delta_std * std_val                    # unscaled change
+                rmse_pc = np.sqrt(np.mean(dec_delta**2))
+                per_pc_rmse.append(rmse_pc)
+            per_pc_rmse = np.array(per_pc_rmse)
+            frac = per_pc_rmse / (per_pc_rmse.sum() + 1e-12)
+            print("[DIAG-PC] total spatial RMSE from encoded error:", float(total_spatial_rmse))
+            print("[DIAG-PC] per-PC RMSE:", np.round(per_pc_rmse, 6))
+            print("[DIAG-PC] per-PC RMSE fraction:", np.round(frac, 4))
+    except Exception as _e:
+        print("[DIAG-PC] per-PC contribution diag failed:", _e)
+    # ---------- end 插入 ----------
 
     # decode Y
     if encoder == "PCA":
@@ -331,6 +334,10 @@ def return_validation_function(X_test, Y_true_flat, trained_pipeline, decoder, m
         Y_var_out = np.full((n, lat, lon), np.nan)
 
     r2_value = r2_score(Y_true_full, Y_pred_full)
+    print("[DIAG] Y_true_flat global mean:", float(np.mean(Y_true_full)))
+    print("[DIAG] Y_pred_flat global mean:", float(np.mean(Y_pred_full)))
+    print("[DIAG] bias (mean error):", float(np.mean(Y_pred_full - Y_true_full)))
+    print("[DIAG] rmse:", rmse)
 
     return {"Y_pred_out": Y_pred_out,
             "Y_true_out": Y_true_out,
@@ -357,100 +364,156 @@ def run_training_all(train_dict,regressor_type="GPR", kernel="RBF_White", pca_va
     }
 
 
-# 20% for validation; 80% for training
-# only sample once
-def run_training_28(train_dict,  regressor_type="GPR", kernel="RBF_White", pca_variance_ratio=0.999, encoder="PCA", vae_config=None, return_validation=True):
-    # load data
-    X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
-    # split data for training and testing
-    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2)
-    # train model
-    training_info = run_training(X_train, Y_train_flat, regressor_type=regressor_type, kernel=kernel, pca_variance_ratio=pca_variance_ratio, encoder=encoder, vae_config=vae_config)
-    trained_pipeline, decoder, mean_val, std_val, n_components, residual_variance = training_info["trained_pipeline"], training_info["decoder"], training_info["mean_val"], training_info["std_val"], training_info["n_components_retained"], training_info["residual_variance"]
-    trained_pipeline = joblib.load(trained_pipeline)
-    decoder = joblib.load(decoder)
-
-    if return_validation:
-        # compute validation metrics
-        validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder, residual_variance)
-        Y_pred_out, Y_true_out, r2_score = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["r2_score"]
-        # plotting for validation
-        r2_map = compute_r2_map(Y_true_out, Y_pred_out, lat_array, lon_array)
-        plot_r2_map_with_latlon(r2_map, lat_array=lat_array, lon_array=lon_array,  regressor_type= regressor_type,
-                                encoder=encoder, kernel=kernel, save_dir="outputs/logs")
-        print(f"[INFO] R² Score: {r2_score:.4f}")
-        print("[INFO] here we picked timesteps 0 1 2 3 999 for demonstration, edit the code if you want to see other timesteps")
-        for timestep in [0, 1, 2, 3, 999]:
-            plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array=lat_array, lon_array=lon_array, timestep=timestep, emulator_name= regressor_type,
-                encoder_name=encoder, kernel_name=kernel, save_folder="outputs/maps", title_suffix=f"Timestep {timestep}")
-
-    return {
-        "pipeline_model": trained_pipeline,
-        "decoder": decoder,
-        "encoder": encoder,
-        "r2_score": r2_score,
-        "n_components_retained": n_components,
-        "original_variable": var_name,
-        "spatial_shape": spatial_shape,
-        "Y_pred_out": Y_pred_out,
-        "Y_true_out": Y_true_out,
-        "X_test": X_test,
-        "encoder_used": encoder,
-        "regressor_type":  regressor_type
-    }
-
-
-# 10 fold cross-validation
-# 10% for validation; 90% for training
 def run_training_10fold(cfg_path,
-                               regressor_type="GPR",
-                               encoder="PCA",
-                               fixed_encoder_hp=True,
-                               fixed_regressor_hp=True,
-                               return_validation=True,
-                               use_trained_pipeline=False,
-                               trained_pipeline=None,
-                               trained_decoder=None,
-                               mean_val=None,
-                               std_val=None,
-                               residual_variance=None):
-    # load data
-    X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(train_dict)
-    # split data for training and testing
-    X_train, X_test, Y_train_flat, Y_test_flat = train_test_split(X, Y_flat, test_size=0.2)
-    # train model
-    training_info = run_training(X_train, Y_train_flat, regressor_type=regressor_type, kernel=kernel, pca_variance_ratio=pca_variance_ratio, encoder=encoder, vae_config=vae_config)
-    trained_pipeline, decoder, mean_val, std_val, n_components = training_info["trained_pipeline"], training_info["decoder"], training_info["mean_val"], training_info["std_val"], training_info["n_components_retained"]
-    trained_pipeline = joblib.load(trained_pipeline)
-    decoder = joblib.load(decoder)
+                        regressor_type="GPR",
+                        encoder="PCA",
+                        fixed_encoder_hp=True,
+                        fixed_regressor_hp=True,
+                        return_validation=True):
+    """
+    Perform 10-fold cross-validation training and validation.
+    """
+    from sklearn.model_selection import KFold
 
+    if isinstance(cfg_path, (str, Path)):
+        with open(cfg_path, "r") as fh:
+            cfg = yaml.safe_load(fh)
+    else:
+        cfg = cfg_path
+    emulator_name = cfg.get("emulators", "highlowmod_ice")
+
+    # Load data
+    X, Y_flat, var_name, spatial_shape, lat_array, lon_array = load_training_data(cfg_path)
+    n_samples = X.shape[0]
+
+    Y_pred_full = []
+    Y_true_full = []
+    rmse_full = []
+
+    kf = KFold(n_splits=20, shuffle=True, random_state=42)
+
+    for fold, (train_indices, test_indices) in enumerate(kf.split(X)):
+        print(f"[INFO] Processing fold {fold + 1}/20...")
+        if hasattr(X, "iloc"):
+            X_train = X.iloc[train_indices]
+            X_test  = X.iloc[test_indices]
+        else:
+            X_train = X[train_indices]
+            X_test  = X[test_indices]
+
+        # Y_flat is likely ndarray; index directly
+        Y_train_flat = Y_flat[train_indices]
+        Y_test_flat  = Y_flat[test_indices]
+        # Train model
+        training_info = run_training(
+            cfg_path,
+            X_train,
+            Y_train_flat,
+            regressor_type=regressor_type,
+            encoder=encoder,
+            fixed_encoder_hp=fixed_encoder_hp,
+            fixed_regressor_hp=fixed_regressor_hp
+        )
+
+        trained_pipeline = joblib.load(training_info["trained_pipeline"])
+        decoder = joblib.load(training_info["decoder"])
+        mean_val = training_info["mean_val"]
+        std_val = training_info["std_val"]
+        residual_variance = training_info.get("residual_variance", None)
+
+        # Validation
+        validation_metrics = return_validation_function(
+            X_test,
+            Y_test_flat,
+            trained_pipeline,
+            decoder,
+            mean_val,
+            std_val,
+            spatial_shape,
+            encoder,
+            residual_variance
+        )
+
+        Y_pred_out, Y_true_out, rmse = (
+            validation_metrics["Y_pred_out"],
+            validation_metrics["Y_true_out"],
+            validation_metrics["rmse"]
+        )
+
+        Y_pred_full.extend(Y_pred_out)
+        Y_true_full.extend(Y_true_out)
+        rmse_full.append(rmse)
+
+    # Stack and reshape results
+    Y_pred_full = np.array(Y_pred_full)
+    Y_true_full = np.array(Y_true_full)
+    rmse_full = np.array(rmse_full)
+
+    n = Y_pred_full.shape[0]
+    Y_pred_out_full = Y_pred_full.reshape(n, lat_array.shape[0], lon_array.shape[0])
+    Y_true_out_full = Y_true_full.reshape(n, lat_array.shape[0], lon_array.shape[0])
+
+    # Compute overall R² score
+    overall_r2 = r2_score(Y_true_out_full.flatten(), Y_pred_out_full.flatten())
+
+    
     if return_validation:
-        # compute validation metrics
-        validation_metrics = return_validation_function(X_test, Y_test_flat, trained_pipeline, decoder, mean_val, std_val, spatial_shape, encoder)
-        Y_pred_out, Y_true_out, r2_score = validation_metrics["Y_pred_out"], validation_metrics["Y_true_out"], validation_metrics["r2_score"]
-        # plotting for validation
-        r2_map = compute_r2_map(Y_true_out, Y_pred_out, lat_array, lon_array)
-        plot_r2_map_with_latlon(r2_map, lat_array=lat_array, lon_array=lon_array,  regressor_type= regressor_type,
-                                encoder=encoder, kernel=kernel, save_dir="outputs/logs")
-        print(f"[INFO] R² Score: {r2_score:.4f}")
-        print("[INFO] here we picked timesteps 0 1 2 3 999 for demonstration, edit the code if you want to see other timesteps")
-        for timestep in [0, 1, 2, 3, 999]:
-            plot_prediction_maps_with_info(Y_true_out, Y_pred_out, lat_array=lat_array, lon_array=lon_array, timestep=timestep, emulator_name= regressor_type,
-                encoder_name=encoder, kernel_name=kernel, save_folder="outputs/maps", title_suffix=f"Timestep {timestep}")
+        # Plotting for validation
+        r2_map = compute_r2_map(Y_true_out_full, Y_pred_out_full, lat_array, lon_array)
+        plot_r2_map_with_latlon(
+            r2_map,
+            lat_array=lat_array,
+            lon_array=lon_array,
+            regressor_type=regressor_type,
+            kernel="RBF_White",
+            encoder=encoder,
+            save_dir="outputs/logs"
+        )
+        print(f"[INFO] Overall R² Score: {overall_r2:.4f}")
+        # Save Y_true_out_full and Y_pred_out_full as NetCDF files
+        output_dir = "examples/outputs/"
+        os.makedirs(output_dir, exist_ok=True)
+        y_pred_path = os.path.join(output_dir, "Y_pred_out_full_"+emulator_name+"_"+encoder+"+"+regressor_type+"_10fold.nc")
+        y_true_path = os.path.join(output_dir, "Y_true_out_full_"+emulator_name+"_"+encoder+"+"+regressor_type+"_10fold.nc")
+
+        # Remove files if they already exist
+        if os.path.exists(y_pred_path):
+            os.remove(y_pred_path)
+        if os.path.exists(y_true_path):
+            os.remove(y_true_path)
+
+        xr.Dataset({
+            "mean": (["time", "lat", "lon"], Y_true_out_full),
+            "latitude": (["lat"], lat_array),
+            "longitude": (["lon"], lon_array)
+        }).to_netcdf(y_true_path)
+
+        xr.Dataset({
+            "mean": (["time", "lat", "lon"], Y_pred_out_full),
+            "latitude": (["lat"], lat_array),
+            "longitude": (["lon"], lon_array)
+        }).to_netcdf(y_pred_path)
+
+        print(f"[INFO] Y_pred_out_full saved to {y_pred_path}")
+        print(f"[INFO] Y_true_out_full saved to {y_true_path}")
+
+        # Visualize the performance
+        plot_r2_map_with_latlon(r2_map, lat_array=lat_array, lon_array=lon_array,
+                    regressor_type=regressor_type, encoder=encoder,
+                    save_dir="examples/outputs/10fold/plots")
 
     return {
-        "pipeline_model": trained_pipeline,
-        "decoder": decoder,
+        "r2_score": overall_r2,
+        "pipeline_model": training_info["trained_pipeline"],
+        "decoder": training_info["decoder"],
         "encoder": encoder,
-        "r2_score": r2_score,
-        "n_components_retained": n_components,
+        "n_components_retained": training_info["n_components_retained"],
         "original_variable": var_name,
         "spatial_shape": spatial_shape,
-        "Y_pred_out": Y_pred_out,
-        "Y_true_out": Y_true_out,
-        "X_test": X_test,
-        "encoder_used": encoder,
-        "regressor_type":  regressor_type
+        "Y_pred_out": Y_pred_out_full,
+        "Y_true_out": Y_true_out_full,
+        "rmse_per_fold": rmse_full,
+        "regressor_type": regressor_type
     }
 
 
@@ -481,19 +544,19 @@ def run_training_leave_one_out(cfg_path,
     time_start = time.time()
     batch_size = 1  # Number of samples to leave out each time
 
-    # helper to index X/Y for pandas or numpy
-    def slice_X(Xobj, idx):
-        return Xobj.iloc[idx] if hasattr(Xobj, "iloc") else Xobj[idx, :]
-
     # original behaviour: retrain for each leave-out
     for i in range(0, n_samples, batch_size):
         test_indices = np.arange(i, min(i + batch_size, n_samples))
         train_indices = np.setdiff1d(np.arange(n_samples), test_indices)
 
-        X_train = slice_X(X, train_indices)
+        if hasattr(X, "iloc"):
+            X_train = X.iloc[train_indices]
+            X_test  = X.iloc[test_indices]
+        else:
+            X_train = X[train_indices]
+            X_test  = X[test_indices]
         Y_train_flat = Y_flat[train_indices]
-        X_test = slice_X(X, test_indices)
-        Y_test_flat = Y_flat[test_indices]
+        Y_test_flat  = Y_flat[test_indices]
 
         training_info = run_training(cfg_path,
                                      X_train,
@@ -550,8 +613,8 @@ def run_training_leave_one_out(cfg_path,
     # Save NetCDFs
     output_dir = cfg.get('output_dir', 'outputs/leave_one_out/')
     os.makedirs(output_dir, exist_ok=True)
-    y_pred_path = os.path.join(output_dir, f"Y_pred_out_full_{emulator_name}.nc")
-    y_true_path = os.path.join(output_dir, f"Y_true_out_full_{emulator_name}.nc")
+    y_pred_path = os.path.join(output_dir, f"Y_pred_out_full_{emulator_name}_{encoder}+{regressor_type}.nc")
+    y_true_path = os.path.join(output_dir, f"Y_true_out_full_{emulator_name}_{encoder}+{regressor_type}.nc")
     if os.path.exists(y_pred_path):
         os.remove(y_pred_path)
     if os.path.exists(y_true_path):
@@ -761,10 +824,8 @@ def run_training_LGBM_optimization(cfg_path, encoder="PCA", regressor="LGBM", fi
     Use PCA as encoder.
     """
     import optuna
-    import optuna.visualization as vis
-    from lightgbm import LGBMRegressor
-    from sklearn.model_selection import cross_val_score
-    import matplotlib.pyplot as plt
+    from paleo_emu.regressor import MultiEstimator
+    from sklearn.model_selection import KFold
 
     with open(cfg_path, 'r') as file:
         cfg = yaml.safe_load(file) or {}
@@ -781,64 +842,47 @@ def run_training_LGBM_optimization(cfg_path, encoder="PCA", regressor="LGBM", fi
         cfg_path=cfg_path
     )
     latent_dim = Y_train_encoded.shape[1]
+    
+    print("[INFO] Starting hyperparameter optimization for LGBMRegressor...")
+    # Configurable knobs
+    k_folds = cfg.get("optuna_kfolds", 20)                # use 20-fold CV by default (faster than LOO)
+    trials_pc0 = int(cfg.get("optuna_trials_pc0", 40))   # budget for dominant PC
+    trials_other = int(cfg.get("optuna_trials_other", 10))  # budget for other PCs
+    top_k_decode_eval = int(cfg.get("optuna_top_k_decode_eval", 3))  # how many top candidates to re-evaluate in decoded space
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0)
 
-    if fixed_regressor_hp:
-        print("[INFO] Using fixed hyperparameters for LGBMRegressor.")
-        lgbm_regressor = build_regressor(
-            cfg_path=cfg_path,
-            regressor_type="LGBM",
-            encoder=encoder,
-            fixed_regressor_hp=True)
-    else:
-        print("[INFO] Starting hyperparameter optimization for LGBMRegressor...")
-        def objective(trial):
-            params = {
-                "num_leaves": trial.suggest_int("num_leaves", 128, 512),
-                "max_depth": trial.suggest_int("max_depth", 3, 8),
-                "learning_rate": trial.suggest_loguniform("learning_rate", 1e-2, 0.05),
-                "n_estimators": trial.suggest_int("n_estimators", 300, 700),
-                "subsample": trial.suggest_uniform("subsample", 0.4, 0.8),
-                "colsample_bytree": trial.suggest_uniform("colsample_bytree", 0.6, 1.0),
-                "min_child_samples": trial.suggest_int("min_child_samples", 1, 10),
-            }
-            model = MultiOutputRegressor(LGBMRegressor(**params, random_state=42, n_jobs=1))
-            # 使用负 MSE（越大越好），少量折数以加速
-            scores = cross_val_score(model, X_train, Y_train_encoded, cv=4, scoring="neg_mean_squared_error")
-            return scores.mean()
-        n_jobs = 1  # Set to 1 to avoid nested parallelism issues
-        study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=30, n_jobs=n_jobs)
-        print(f"[OPTUNA] best params: {study.best_params}, best score: {study.best_value:.5f}")
-        best_params = study.best_params
-        lgbm_regressor = LGBMRegressor(**best_params, random_state=42, n_jobs=n_jobs)
-        # Visualization of optimization results
-        if save_log:
-            output_dir = cfg['log_path'] if 'log_path' in cfg else "examples/logs"
-            os.makedirs(output_dir, exist_ok=True)
-            vis.plot_optimization_history(study).write_image(os.path.join(output_dir, "optimization_history.png"))
-            vis.plot_parallel_coordinate(study).write_image(os.path.join(output_dir, "parallel_coordinate.png"))
-            vis.plot_param_importances(study).write_image(os.path.join(output_dir, "param_importances.png"))
-            vis.plot_slice(study).write_image(os.path.join(output_dir, "slice_plot.png"))
-            vis.plot_contour(study).write_image(os.path.join(output_dir, "contour_plot.png"))
-            print(f"[INFO] Optimization plots saved to {output_dir}")
+    best_params_per_pc = {}
+    estimators_per_pc = []
+    n_outputs = latent_dim
+    # helper: conservative defaults for other PCs used when evaluating decoded RMSE candidates
+    default_other = {
+        "num_leaves": 31,
+        "max_depth": 6,
+        "learning_rate": 0.01,
+        "n_estimators": 200,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "min_child_samples": 20,
+    }
+
+
+    print(f"[INFO] Hyperparameter optimization for LGBMRegressor completed.")
+
+    # build a multi-estimator using per-pc estimators
+    lgbm_regressor = MultiEstimator(estimators_per_pc)
 
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
         ("regressor", MultiOutputRegressor(lgbm_regressor))
     ])
-
     pipeline.fit(X_train, Y_train_encoded)
 
-    print(f"[INFO] Best parameters found: {study.best_params}")
-    print(f"[INFO] Best R² score from CV: {-study.best_value:.4f}")
-
-    best_model = pipeline
-
-    return {
-        "best_model": best_model,
-        "best_params": study.best_params,
-        "best_r2_score": study.best_value
+    out = {
+        "best_model": pipeline,
+        "best_params_per_pc": best_params_per_pc,
     }
+    return out
+
 
 def run_training_GPR_optimization(cfg_path, encoder="PCA", regressor="GPR", fixed_encoder_hp=True, fixed_regressor_hp=False, save_log=True, do_leaveoneout=True, return_validation=False):
     """
@@ -926,12 +970,12 @@ def run_training_GPR_optimization(cfg_path, encoder="PCA", regressor="GPR", fixe
 
     if kernel_name == "RBF_White":
         GPR = GaussianProcessRegressor(
-            kernel=C(best["constant_value"]) * RBF(length_scale=best_length_scales) + WhiteKernel(noise_level=best["noise_level"]),
+            kernel=C(best["constant_value"]) * RBF(length_scales=best_length_scales) + WhiteKernel(noise_level=best["noise_level"]),
             alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
         )
     elif kernel_name == "Matern_White":
         GPR = GaussianProcessRegressor(
-            kernel=C(best["constant_value"]) * Matern(length_scale=best_length_scales, nu=best["nu"]) + WhiteKernel(noise_level=best["noise_level"]),
+            kernel=C(best["constant_value"]) * Matern(length_scales=best_length_scales, nu=best["nu"]) + WhiteKernel(noise_level=best["noise_level"]),
             alpha=best["nugget"], n_restarts_optimizer=1, random_state=42, normalize_y=True
         )
 
