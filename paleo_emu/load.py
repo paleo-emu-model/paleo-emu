@@ -69,10 +69,20 @@ def load_forcing_data(forcing_cfg,scenario="rcp85.1"):
     Expected keys: file_path, forcing_input
     """
     cfg = forcing_cfg
-    
+    if not isinstance(cfg, dict):
+        # load from yaml file
+        if isinstance(forcing_cfg, (str, Path)):
+            cfg_file = Path(forcing_cfg)
+            if not cfg_file.exists():
+                raise FileNotFoundError(f"Forcing config file not found: {forcing_cfg}")
+            with open(cfg_file, "r") as fh:
+                cfg = yaml.safe_load(fh)
+        else:
+            raise TypeError("forcing_cfg must be dict, str, or Path")
+        
     # now cfg should be dict
-    base = Path(cfg.get("forcing_data", {}).get("file_path", "."))
-    forcing_input = cfg.get("forcing_data", {}).get(scenario, {}).get("forcing_input")
+    base = Path(cfg.get("file_path", "."))
+    forcing_input = cfg.get("scenarios", {}).get(scenario, {})
     if not forcing_input:
         raise KeyError("forcing config must include forcing_input")
 

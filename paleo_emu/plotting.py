@@ -6,7 +6,7 @@ import cartopy.crs as ccrs
 import os
 
 
-def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, regressor_type, encoder, kernel, save_dir="examples/outputs/maps"):
+def plot_r2_map_with_latlon(r2_map, lat_array, lon_array, regressor_type, encoder, kernel="RBF", save_dir="examples/outputs/maps"):
     """
     save R2 map
     - r2_map: (lat, lon) 

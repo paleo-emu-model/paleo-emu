@@ -2,19 +2,15 @@
 This module is used to encode (i.e., reduce dimensionality) data using PCA or VAE.
 """
 import numpy as np
-
 from pyparsing import Path
-import tensorflow as tf
 
 from sklearn.decomposition import PCA
-
 from paleo_emu.vae import VAE, compute_vae_loss
 from paleo_emu.export import save_training_log
-import xarray as xr
 import yaml
 
 # old code, keep it for now
-def encode(Y_flat, encoder="PCA", fixed_encoder_hp=True,cfg_path=None):
+def encode(Y_flat, encoder="PCA", fixed_encoder_hp=None,cfg_path=None):
     """
     return:
         Y_pca: encoded data, shape (n_samples, n_components)
@@ -29,8 +25,8 @@ def encode(Y_flat, encoder="PCA", fixed_encoder_hp=True,cfg_path=None):
     Y_flat_std = (Y_flat - mean_val) / std_val
 
     residual_variance = None
-    
-    # Load fixed_encoder_hp from emulator.yaml configuration file
+
+    # Load cfg from emulator.yaml configuration file
     if isinstance(cfg_path, dict):
         cfg = cfg_path
     else:
@@ -39,18 +35,17 @@ def encode(Y_flat, encoder="PCA", fixed_encoder_hp=True,cfg_path=None):
             raise FileNotFoundError(f"Config file not found: {cfg_path}")
         with open(cfg_file, "r") as fh:
             cfg = yaml.safe_load(fh)
-        print("[WARNING] No cfg_path provided, using default encoder settings.")
 
     if encoder == "PCA":
         if fixed_encoder_hp:
             print("[INFO] Using fixed prescribed parameters for PCA. ")
             n_samples = Y_flat_std.shape[0]
             n_components = cfg['PCA_config']['n_components']
-            pca_model = PCA(n_components=n_components)
+            pca_model = PCA(n_components=n_components, svd_solver="full")
         else:
-            print("[INFO] defined variance ratio for PCA instead of nkeep.")
             pca_variance_ratio = 0.99
-            pca_model = PCA(n_components=pca_variance_ratio)
+            print(f"[INFO] defined variance ratio as {pca_variance_ratio} for PCA instead of nkeep.")
+            pca_model = PCA(n_components=pca_variance_ratio, svd_solver="full")
 
         Y_pca = pca_model.fit_transform(Y_flat_std)
         print(f"[INFO] PCA n_components_: {pca_model.n_components_}")
@@ -69,6 +64,7 @@ def encode(Y_flat, encoder="PCA", fixed_encoder_hp=True,cfg_path=None):
               f"unexplained ratio ≈ {unexplained_ratio:.6f}")
 
     elif encoder == "VAE":
+        import tensorflow as tf
         # resolve vae config (priority: explicit vae_config param -> YAML VAE_config -> defaults)
         if fixed_encoder_hp:
             print("[INFO] Using fixed prescribed parameters for VAE.")

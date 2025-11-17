@@ -1,0 +1,4 @@
+
+file_path: "../Emulator_Charlie/Results/"
+scenarios:
+    rcp85.1: "emul_inputs_RCP85.67.res"

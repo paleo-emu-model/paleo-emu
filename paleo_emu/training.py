@@ -18,7 +18,6 @@ procedures of training:
 
 
 from tabnanny import verbose
-from lightgbm import LGBMRegressor
 import numpy as np
 import xarray as xr
 import os
@@ -26,14 +25,13 @@ import time
 
 import tensorflow as tf
 
-from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import cross_val_score
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
-from sklearn.metrics import root_mean_squared_error
 import joblib
 import yaml
 from pathlib import Path
@@ -42,20 +40,32 @@ from pathlib import Path
 from paleo_emu.load import load_training_data
 from paleo_emu.encoder import encode
 from paleo_emu.regressor import build_regressor
-from paleo_emu.plotting import plot_r2_map_with_latlon, plot_prediction_maps_with_info, plot_histogram_4_leave1out
+from paleo_emu.plotting import plot_r2_map_with_latlon, plot_histogram_4_leave1out
 from paleo_emu.validation import compute_r2_map
 
-
-def run_training(cfg_path, X_train, Y_train, regressor_type="GPR", encoder="PCA",
-                 fixed_regressor_hp=False, fixed_encoder_hp=True,
-                 save_path="examples/outputs/emulator_saved",
-                 save_name="emulator_model",
-                 save_pipeline=False):
+def run_training(cfg_path, X_train=None, Y_train=None, regressor_type=None, encoder=None,
+                 fixed_regressor_hp=None, fixed_encoder_hp=None, save_path=None,
+                 save_name=None, save_pipeline=None):
     # training for given data
     """
     X_training: (n_samples, 5) the input feature matrix
     Y_training: (n_samples, lat*lon) the flattened output matrix
     """
+    # Load configuration from YAML file
+    if isinstance(cfg_path, (str, Path)):
+        with open(cfg_path, "r") as fh:
+            cfg = yaml.safe_load(fh)
+    else:
+        cfg = cfg_path
+
+    regressor_type = regressor_type if regressor_type is not None else cfg.get("regressor_type", "GPR")
+    encoder = encoder if encoder is not None else cfg.get("encoder", "PCA")
+    fixed_regressor_hp = fixed_regressor_hp if fixed_regressor_hp is not None else cfg.get("fixed_regressor_hp", False)
+    fixed_encoder_hp = fixed_encoder_hp if fixed_encoder_hp is not None else cfg.get("fixed_encoder_hp", True)
+    save_path = save_path if save_path is not None else cfg.get("save_path", "examples/outputs/emulator_saved")
+    save_name = save_name if save_name is not None else cfg.get("save_name", "emulator_model")
+    save_pipeline = save_pipeline if save_pipeline is not None else cfg.get("save_pipeline", True)
+
     if X_train is None or Y_train is None:
         X_train, Y_train, _, _, lat_array, lon_array = load_training_data(cfg_path)
 
@@ -69,11 +79,13 @@ def run_training(cfg_path, X_train, Y_train, regressor_type="GPR", encoder="PCA"
 
     print(f"[DIAG] Y_train_encoded shape: {Y_train_encoded.shape}")
     print("[DIAG] Y_train_encoded per-PC mean/std (first 10):")
+    for pc_idx in range(min(10, latent_dim)):
+        pc_data = Y_train_encoded[:, pc_idx]
+        print(f"  PC{pc_idx}: mean={np.mean(pc_data):.4e}, std={np.std(pc_data):.4e}")
 
     regressor = build_regressor(
             cfg_path=cfg_path,
             regressor_type=regressor_type,
-            encoder=encoder,
             fixed_regressor_hp=fixed_regressor_hp,
             verbose=verbose
     )
@@ -84,22 +96,18 @@ def run_training(cfg_path, X_train, Y_train, regressor_type="GPR", encoder="PCA"
         ("scaler", StandardScaler()),
         ("regressor", reg_step)
     ])
-
     model.fit(X_train, Y_train_encoded)
-    
-    # **********************************
-    model_joblib_name = os.path.join(save_path, f"{save_name}.joblib")
+
 
     meta = {
         "pipeline_path": model_joblib_name,
         "encoder": encoder,
         "regressor_type": regressor_type,
-        "n_components_retained": latent_dim,
-        "mean_val": mean_val,
-        "std_val": std_val,
-        "lat_array": lat_array,
-        "lon_array": lon_array,
-        "spatial_shape": spatial_shape
+        "n_components_retained": int(latent_dim),
+        "mean_val": mean_val.tolist(),
+        "std_val": std_val.tolist(),
+        "lat_array": lat_array.tolist(),
+        "lon_array": lon_array.tolist()
     }
 
     data_to_save = {
@@ -107,23 +115,22 @@ def run_training(cfg_path, X_train, Y_train, regressor_type="GPR", encoder="PCA"
     "decoder": decoder,
     "meta": meta
     }
-
-    pipeline_joblib_name = os.path.join(save_path, f"{save_name}_pipeline.joblib")
-    # 一次性保存到文件
-    joblib.dump(data_to_save, pipeline_joblib_name)
-
+   # 一次性保存到文件
+    # Ensure save dir exists before writing files
+    os.makedirs(save_path, exist_ok=True)
+    model_joblib_name = os.path.join(save_path, f"{save_name}.joblib")
+    joblib.dump(data_to_save, model_joblib_name)
+    
     if save_pipeline:
-        # Ensure the save path exists
-        os.makedirs(save_path, exist_ok=True)
-        # Save metadata as a YAML file
+        # Save metadata as a YAML file (meta already converted to native types)
         meta_path = os.path.join(save_path, f"{save_name}.yaml")
         with open(meta_path, "w") as fh:
             yaml.safe_dump(meta, fh)
         print(f"[INFO] Metadata saved to {meta_path}")
 
     return {
-        "trained_pipeline": pipeline_joblib_name,
-        "decoder": pipeline_joblib_name,
+        "trained_pipeline": model_joblib_name,
+        "decoder": model_joblib_name,
         "encoder": encoder,
         "mean_val": mean_val,
         "std_val": std_val, 
