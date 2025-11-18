@@ -99,6 +99,10 @@ def run_training(cfg_path, X_train=None, Y_train=None, regressor_type=None, enco
     model.fit(X_train, Y_train_encoded)
 
 
+    # Ensure save dir exists before writing files
+    os.makedirs(save_path, exist_ok=True)
+    model_joblib_name = os.path.join(save_path, f"{save_name}.joblib")
+
     meta = {
         "pipeline_path": model_joblib_name,
         "encoder": encoder,
@@ -116,9 +120,6 @@ def run_training(cfg_path, X_train=None, Y_train=None, regressor_type=None, enco
     "meta": meta
     }
    # 一次性保存到文件
-    # Ensure save dir exists before writing files
-    os.makedirs(save_path, exist_ok=True)
-    model_joblib_name = os.path.join(save_path, f"{save_name}.joblib")
     joblib.dump(data_to_save, model_joblib_name)
     
     if save_pipeline:
