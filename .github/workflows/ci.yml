@@ -32,6 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyyaml
+          python -c "import netCDF4; print('netCDF4 version:', netCDF4.__version__)"
 
       - name: Run tests
         env:
