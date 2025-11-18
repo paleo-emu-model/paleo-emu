@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true          # ✅ pull real LFS files (NetCDF, etc.)
+          fetch-depth: 0     # optional, but good for full history / LFS
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
