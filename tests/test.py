@@ -38,6 +38,7 @@ class TestTraining(unittest.TestCase):
         )
         forcing_cfg = self.examples_dir / "forcing.yaml"
 
+
         prediction = run_prediction(
             model_cfg=str(model_cfg_path),
             forcing_cfg=str(forcing_cfg),
@@ -52,7 +53,7 @@ class TestTraining(unittest.TestCase):
             / "prediction"
             / "PCA_GPR_forcing.yaml_prediction.nc"
         )
-        ds = xr.open_dataset(ds_path)
+        ds = xr.open_dataset(ds_path, engine="h5netcdf")
         self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.01)
 
 
