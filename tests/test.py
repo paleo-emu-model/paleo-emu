@@ -1,61 +1,60 @@
 import os
+from pathlib import Path
 import unittest
 import xarray as xr
-from paleo_emu.training import run_training_28
+from paleo_emu.training import run_training
+from paleo_emu.prediction import run_prediction
+
 
 class TestTraining(unittest.TestCase):
 
-    def test_training_28(self):
-        emulator = "lowmod_ice"
-        vae_config = {
-            "latent_dim": 1024,
-            "epochs": 80,
-            "learning_rate": 1e-4,
-            "batch_size": 128,
-            "kl_weight": 0.1
-        }
+    def __init__(self, methodName="runTest"):
+        super().__init__(methodName)
 
-        file_path = os.path.join(".", "examples", "training_data")
-        train_dict = {
-            "lowmod_ice": {
-                "file_path": file_path,
-                "X_input": "training_data_lowmodice_temp_formatted.res",
-                "Y_output": "training_data_lowmodice_temp_formatted.nc",
-                "label": "lowmod_ice",
-            },
-            "highmod_ice": {
-                "file_path": file_path,
-                "X_input": "training_data_highmodice_temp_formatted.res",
-                "Y_output": "training_data_highmodice_temp_formatted.nc",
-                "label": "highmod_ice",
-            },
-            "highlowmod_ice": {
-                "file_path": file_path,
-                "X_input": "training_data_highlowmodice_temp_formatted.res",
-                "Y_output": "training_data_highlowmodice_temp_formatted.nc",
-                "label": "highlowmod_ice",
-            },
-        }
+        # Directory of this test file: .../tests
+        here = Path(__file__).resolve().parent
 
-        run_training_28(
-            train_dict[emulator],
+        # Repo root (one level up from tests/)
+        repo_root = here.parent
+
+        # Path to examples directory
+        self.examples_dir = repo_root / "examples"
+
+    def test_run_training(self):
+        cfg_path = self.examples_dir / "training_test.yaml"
+        emulatorPCAGPR = run_training(
+            cfg_path=str(cfg_path),
             regressor_type="GPR",
-            kernel="RBF",
             encoder="PCA",
-            vae_config=vae_config,
-            return_validation=True,
+            save_pipeline=True,
+        )
+
+    def test_run_prediction(self):
+        model_cfg_path = (
+            self.examples_dir
+            / "outputs"
+            / "emulator_saved"
+            / "emulator_PCA+GPR_lowice_test.joblib"
+        )
+        forcing_cfg = self.examples_dir / "forcing.yaml"
+
+        prediction = run_prediction(
+            model_cfg=str(model_cfg_path),
+            forcing_cfg=str(forcing_cfg),
+            scenario="rcp85.1",
+            output_dir=str(self.examples_dir / "outputs" / "prediction"),
         )
 
     def test_model_output(self):
-        file_path = os.path.join(".", "examples", "training_data")
-        ds = xr.open_dataset(
-            os.path.join(file_path, "training_data_lowmodice_temp_formatted.nc")
+        ds_path = (
+            self.examples_dir
+            / "outputs"
+            / "prediction"
+            / "PCA_GPR_forcing.yaml_prediction.nc"
         )
-        self.assertAlmostEqual(ds["var"].mean(), 5.28, delta=0.01)
+        ds = xr.open_dataset(ds_path)
+        self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.01)
 
 
 if __name__ == "__main__":
-    # Local-only runner
-    # - Run all tests in this file:  python tests/test_training.py -v
-    # - Or enable training:          RUN_TRAIN=1 python tests/test_training.py -v
     unittest.main(verbosity=2)

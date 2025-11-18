@@ -1,0 +1,65 @@
+# this file should contains the following configurations:
+# 1.1 input variable names
+# 1.2 input path and file names for training data
+# 1.3 output path for logs and trained emulators
+# 2.1 encoder type 
+# 2.2 encoder configurations
+# 2.2.1 fixed encoder hyperparameters or not
+# 2.2.2 encoder hyperparameters configurations
+# 2.3 regressor type
+# 2.4 regressor configurations
+# 2.4.1 fixed regressor hyperparameters or not
+# 2.4.2 regressor hyperparameters configurations
+
+
+
+variables:
+  - "tas"
+  - "pr"
+
+# training_test.yaml
+encoder: PCA
+regressor_type: GPR
+fixed_encoder_hp: false
+fixed_regressor_hp: true
+save_path: examples/outputs/emulator_saved
+save_name: emulator_PCA+GPR_lowice_test
+save_pipeline: false
+
+# training data file paths and names
+
+emulators: "lowmod_ice"
+
+# training data file paths and names
+training_file_path: "examples/training_data/"
+X_input: "training_data_lowmodice_temp_formatted.res"
+Y_output: "training_data_lowmodice_temp_formatted.nc"
+
+
+# save log files path
+log_path: "examples/logs/"
+output_dir: "examples/outputs/"
+
+
+forcing_data:
+  file_path: "examples/forcing_data/"
+  rcp85.1:
+    forcing_input: "Paleo_forcings_2Ma_xin.res"
+
+
+# configuration of parameters for emulator training
+PCA_config:
+  n_components: 5
+  pca_variance_ratio: 0.99
+  
+# configurations for regressors.
+# best hyperparameters are chosen based on
+# -2. encoder type
+GPR_config:
+  kernel: "RBF_White"
+  length_scales: [233.2825891498896, 0.0022671649797259587, 41.72075091907251, 58.57768264765239, 182.12070551134408]
+  noise_level: 0.0001
+  nu: 1.5
+  nugget_value: 0.00012474886011940795
+  constant_value: 0.06354351729633832
+  n_restarts_optimizer: 12

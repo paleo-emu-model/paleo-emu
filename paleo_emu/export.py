@@ -57,7 +57,7 @@ def save_training_log(epoch_losses, latent_dim, epochs, learning_rate, batch_siz
     print(f"[INFO] Hyperparameter log updated: {log_file}")
 
 
-def save_prediction(Y_pred, lat_array, lon_array, output_dir, file_name="prediction"):
+def save_prediction(Y_pred, Y_var, lat_array, lon_array, output_dir, file_name="prediction"):
     """
     Save the prediction results.
     Parameters:
@@ -81,7 +81,17 @@ def save_prediction(Y_pred, lat_array, lon_array, output_dir, file_name="predict
         },
         name="prediction"
     )
-    ds = xr.Dataset({"prediction": da})
+    var = xr.DataArray(
+        data=Y_var,
+        dims=["year", "latitude", "longitude"],
+        coords={
+            "year": np.arange(n_samples),
+            "latitude": np.array(lat_array),
+            "longitude": np.array(lon_array),
+        },
+        name="variance"
+    )
+    ds = xr.Dataset({"prediction": da, "variance": var})
     save_path = output_dir / f"{file_name}.nc"
     ds.to_netcdf(save_path)
     print(f"[INFO] Prediction saved to {save_path}")

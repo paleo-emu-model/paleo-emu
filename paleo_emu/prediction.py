@@ -11,36 +11,149 @@ return:
 
 from paleo_emu.load import load_forcing_data
 from paleo_emu.export import save_prediction
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.multioutput import MultiOutputRegressor
 import numpy as np
 import joblib
+import os
 
-def run_prediction(emulator, forcing_cfg, output_dir):
-    # Check if forcing_cfg is a path to an ASCII data file or a data object
-    if isinstance(forcing_cfg, dict):
-        # Assume it's a file path
-        X_pred = load_forcing_data(forcing_cfg)
+
+def run_prediction(model_cfg=None, forcing_cfg=None, scenario=None, output_dir=None):
+    """
+    emulator: dict or object. If dict, may contain keys 'pipeline_model' and 'decoder' pointing to joblib files.
+    pipeline_path / decoder_path: optional explicit paths to pipeline.joblib and decoder.joblib (take precedence).
+    """
+    # load model config
+    model_cfg = joblib.load(model_cfg) if isinstance(model_cfg, str) else model_cfg
+    model_pipeline = model_cfg["model"]
+    decoder = model_cfg["decoder"]
+    mean_val = model_cfg.get("meta", {}).get("mean_val")
+    std_val = model_cfg.get("meta", {}).get("std_val")
+    spatial_shape = model_cfg.get("meta", {}).get("spatial_shape")
+    lat_array = model_cfg.get("meta", {}).get("lat_array")
+    lon_array = model_cfg.get("meta", {}).get("lon_array")
+    encoder_type = model_cfg.get("meta", {}).get("encoder")
+    regressor_type = model_cfg.get("meta", {}).get("regressor_type", "reg")
+    mean_val = np.array(mean_val)
+    std_val = np.array(std_val)
+    lat_array = np.array(lat_array)
+    lon_array = np.array(lon_array)
+
+
+    X_pred = load_forcing_data(forcing_cfg, scenario=scenario)
+
+    model = model_pipeline
+
+    # Normalize decoder input: accept either a dict with metadata or a raw PCA object
+    pca_obj = None
+    dec = {}
+    if isinstance(decoder, dict):
+        dec = decoder.copy()
     else:
-        # If it's already data, use it directly
-        X_pred = forcing_cfg
+        # treat sklearn PCA (or PCA-like) object as decoder
+        if hasattr(decoder, "inverse_transform") and hasattr(decoder, "components_"):
+            pca_obj = decoder
+            dec["encoder"] = "PCA"
+            # expose components_ and mean_ if present for fallback inverse
+            dec["components_"] = getattr(decoder, "components_", None)
+            dec["mean_"] = getattr(decoder, "mean_", None)
+        else:
+            raise ValueError("Unsupported decoder object loaded; expected dict or PCA-like object.")
 
-    pipeline = joblib.load(emulator["pipeline_model"])
-    decoder = joblib.load(emulator["decoder"])
-    Y_pred_encoded = pipeline.predict(X_pred)
-    if emulator["encoder"] == "PCA":
-        Y_full = decoder.inverse_transform(Y_pred_encoded)
-        Y_full = Y_full * emulator["std_val"] + emulator["mean_val"]
-    elif emulator["encoder"] == "VAE":
-        Y_full = decoder.decoder.predict(Y_pred_encoded)
-        Y_full = Y_full * emulator["std_val"] + emulator["mean_val"]
+    # if spatial_shape is None:
+    #     raise ValueError("spatial_shape not found in decoder or emulator; cannot reshape predictions.")
+    lat, lon = lat_array.shape[0], lon_array.shape[0]
+
+    # 拆分 model
+    final_est = model
+    X_enc = X_pred
+    print("X_enc shape before encoding:", X_enc.shape)
+
+    if hasattr(model, "steps"):
+        steps = model.steps
+        if len(steps) > 1:
+            for _, step in steps[:-1]:
+                X_enc = step.transform(X_enc)
+        final_est = steps[-1][1]
+
+    mean_encoded = None
+    var_encoded  = None
+    if encoder_type == "PCA":
+        if isinstance(final_est, GaussianProcessRegressor):
+            m, s = final_est.predict(X_enc, return_std=True)
+            if m.ndim == 1:  # 单输出
+                m = m[:, None]; s = s[:, None]
+            mean_encoded = m
+            var_encoded  = s**2
+        elif isinstance(final_est, MultiOutputRegressor):
+            means = []
+            vars_ = []
+            ok = True
+            for est in final_est.estimators_:
+                if not isinstance(est, GaussianProcessRegressor):
+                    ok = False
+                    break
+                m, s = est.predict(X_enc, return_std=True)
+                means.append(m); vars_.append(s**2)
+            if ok:
+                mean_encoded = np.stack(means, axis=1)  # (n,k)
+                var_encoded  = np.stack(vars_, axis=1)
+
+    # 若没有方差信息则正常预测均值
+    if mean_encoded is None:
+        Y_pred_encoded = model.predict(X_pred)
     else:
-        Y_full = Y_pred_encoded
+        Y_pred_encoded = mean_encoded  # 使用 GPR 均值
 
-    n = Y_full.shape[0]
-    lat, lon = emulator["spatial_shape"]
-    Y_out = Y_full.reshape(n, lat, lon)
-    lat_array = emulator["lat_array"]
-    lon_array = emulator["lon_array"]
-    save_prediction(Y_out, lat_array, lon_array, output_dir, file_name=f"{emulator['encoder']}_{emulator['regressor_type']}_prediction")
-    return Y_out
+    # 解码: support PCA dict, PCA object, or VAE decoder
+    if encoder_type == "PCA":
+        if pca_obj is not None:
+            Y_std_flat = pca_obj.inverse_transform(Y_pred_encoded)
+        else:
+            # decoder dict may contain a saved pca under key 'pca_obj'
+            if isinstance(decoder, dict) and decoder.get("pca_obj") is not None:
+                Y_std_flat = decoder["pca_obj"].inverse_transform(Y_pred_encoded)
+            elif isinstance(decoder, dict) and ("components_" in decoder and "mean_" in decoder):
+                comps = decoder["components_"]
+                mean_ = decoder["mean_"]
+                Y_std_flat = (Y_pred_encoded @ comps) + mean_
+            else:
+                raise ValueError("No PCA object or components_/mean_ found in decoder dict; cannot inverse_transform.")
+    elif encoder_type == "VAE":
+        # expect decoder dict with key 'decoder' (keras model) or decoder object with .decoder
+        if isinstance(decoder, dict) and decoder.get("decoder") is not None:
+            Y_std_flat = decoder["decoder"].predict(Y_pred_encoded)
+        elif hasattr(decoder, "decoder") and decoder.decoder is not None:
+            Y_std_flat = decoder.decoder.predict(Y_pred_encoded)
+        else:
+            raise ValueError("VAE decoder not found in decoder object/dict.")
+    else:
+        Y_std_flat = Y_pred_encoded
 
-    
+    Y_raw_flat = Y_std_flat * std_val + mean_val
+    n = Y_raw_flat.shape[0]
+    Y_out = Y_raw_flat.reshape(n, lat, lon)
+
+    # 方差传播
+    if (var_encoded is not None) and encoder_type == "PCA":
+        k = var_encoded.shape[1]
+        comps = decoder.components_[:k]      # (k,D)
+        W2 = comps**2
+        var_std_flat_all = var_encoded @ W2  # (n,D)
+        var_raw_flat_all = var_std_flat_all * (std_val**2)
+        Var_out = var_raw_flat_all.reshape(n, lat, lon)
+    else:
+        Var_out = np.full((n, lat, lon), np.nan)
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
+    save_prediction(
+        Y_out,
+        Var_out,
+        lat_array,
+        lon_array,
+        output_dir,
+        file_name=f"{encoder_type}_{regressor_type}_{os.path.basename(str(forcing_cfg))}_prediction"
+    )
+    return Y_out, Var_out
