@@ -8,7 +8,7 @@ class TestTraining(unittest.TestCase):
 
     def __init__(self, methodName = "runTest"):
         super().__init__(methodName)
-        self.file_path = os.path.join(".", "examples")
+        self.file_path = os.getenv('GITHUB_WORKSPACE', '.')#os.path.join(".", "examples")
 
     def test_run_training(self):
         cfg_path = os.path.join(self.file_path, "training_test.yaml")
