@@ -93,5 +93,5 @@ def save_prediction(Y_pred, Y_var, lat_array, lon_array, output_dir, file_name="
     )
     ds = xr.Dataset({"prediction": da, "variance": var})
     save_path = output_dir / f"{file_name}.nc"
-    ds.to_netcdf(save_path)
+    ds.to_netcdf(save_path, engine="h5netcdf")
     print(f"[INFO] Prediction saved to {save_path}")
