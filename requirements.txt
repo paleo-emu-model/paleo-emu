@@ -10,3 +10,4 @@ pillow
 tensorflow
 lightgbm
 cartopy
+pyyaml
