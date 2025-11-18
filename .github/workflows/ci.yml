@@ -33,6 +33,10 @@ jobs:
           pip install -r requirements.txt
           pip install pyyaml
 
+      - name: Generate test data files
+        run: |
+          python -m tests.setup_test_data
+
       - name: Run tests
         env:
           PYTHONPATH: ${{ github.workspace }}/src
