@@ -12,3 +12,5 @@ lightgbm
 cartopy
 pyyaml
 joblib
+netCDF4
+h5netcdf
