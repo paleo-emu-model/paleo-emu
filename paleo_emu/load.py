@@ -49,7 +49,8 @@ def load_training_data(cfg_path):
     X = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']]
 
     # read Y (netCDF)
-    ds = xr.open_dataset(y_path)
+    ds = xr.open_dataset(y_path, engine="h5netcdf")
+
     var_name = list(ds.data_vars)[0]
     dims = ds[var_name].dims
     if len(dims) < 3:
