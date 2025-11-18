@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -32,10 +34,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyyaml
-
-      - name: Generate test data files
-        run: |
-          python -m tests.setup_test_data
 
       - name: Run tests
         env:
