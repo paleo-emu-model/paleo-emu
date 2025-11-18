@@ -103,6 +103,7 @@ def run_training(cfg_path, X_train=None, Y_train=None, regressor_type=None, enco
     os.makedirs(save_path, exist_ok=True)
     model_joblib_name = os.path.join(save_path, f"{save_name}.joblib")
 
+
     meta = {
         "pipeline_path": model_joblib_name,
         "encoder": encoder,
@@ -121,6 +122,8 @@ def run_training(cfg_path, X_train=None, Y_train=None, regressor_type=None, enco
     }
    # 一次性保存到文件
     joblib.dump(data_to_save, model_joblib_name)
+
+    print("exported joblib to:", model_joblib_name)
     
     if save_pipeline:
         # Save metadata as a YAML file (meta already converted to native types)
