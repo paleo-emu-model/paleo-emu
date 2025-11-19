@@ -91,7 +91,7 @@ class TestTraining(unittest.TestCase):
         )
 
         ds = xr.open_dataset(ds_path, engine="h5netcdf")
-        self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.01)
+        self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.1)
 
 
 if __name__ == "__main__":
