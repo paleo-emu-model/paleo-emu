@@ -44,7 +44,7 @@ output_dir: "examples/outputs/"
 forcing_data:
   file_path: "examples/forcing_data/"
   rcp85.1:
-    forcing_input: "Paleo_forcings_2Ma_xin.res"
+    forcing_input: "emul_inputs_RCP85.67.res"
 
 
 # configuration of parameters for emulator training

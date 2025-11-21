@@ -137,6 +137,7 @@ def run_training(cfg_path, X_train=None, Y_train=None, regressor_type=None, enco
         "std_val": std_val, 
         "lat_array": lat_array,
         "lon_array": lon_array,
+        "spatial_shape": (len(lat_array), len(lon_array)),
         "residual_variance": residual_variance,
         "n_components_retained": latent_dim,
         "regressor_type": regressor_type}
