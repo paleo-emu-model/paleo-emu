@@ -15,16 +15,11 @@ import yaml
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 
-def build_regressor(cfg_path, regressor_type="GPR", fixed_regressor_hp=True, verbose=True):
-        # accept either a dict (already parsed) or a path to a yaml file
-    if isinstance(cfg_path, dict):
-        cfg = cfg_path
-    else:
-        cfg_file = Path(cfg_path)
-        if not cfg_file.exists():
-            raise FileNotFoundError(f"Config file not found: {cfg_path}")
-        with open(cfg_file, "r") as fh:
-            cfg = yaml.safe_load(fh)
+def build_regressor(cfg, verbose=True):
+    # Load configuration
+    regressor_type = cfg.regressor_config['regressor_type']
+    encoder = cfg.regressor_config.get('encoder', 'PCA')
+    
             
     if regressor_type == "GPR":
         if fixed_regressor_hp:
@@ -32,14 +27,14 @@ def build_regressor(cfg_path, regressor_type="GPR", fixed_regressor_hp=True, ver
             # Load hyperparameters from emulator.yaml
             print("[INFO] Using fixed hyperparameters range for GPR from YAML configuration.")
             print("[INFO] Different PCs should need different hyperparameters, check if we need to fix it or not.")
-            kernel_name = cfg['GPR_config']['kernel']
-            nugget_value = cfg['GPR_config']['nugget_value']
-            length_scales = cfg['GPR_config']['length_scales']
-            noise_level = cfg['GPR_config'].get('noise_level', 1.0)
-            n_restarts_optimizer = cfg['GPR_config'].get('n_restarts_optimizer', 5)
-            alpha = cfg['GPR_config'].get('alpha', 1e-6)
-            nu = cfg['GPR_config'].get('nu', 1.5)
-            constant_value = cfg['GPR_config'].get('constant_value', 1.0)
+            kernel_name = cfg.regressor_config['kernel_name']
+            nugget_value = cfg.regressor_config['nugget_value']
+            length_scales = cfg.regressor_config['length_scales']
+            noise_level = cfg.regressor_config.get('noise_level', 1.0)
+            n_restarts_optimizer = cfg.regressor_config.get('n_restarts_optimizer', 5)
+            alpha = cfg.regressor_config.get('alpha', 1e-6)
+            nu = cfg.regressor_config.get('nu', 1.5)
+            constant_value = cfg.regressor_config.get('constant_value', 1.0)
             constant_value_bounds = (constant_value * 0.1, constant_value * 10.0) # allow small range of constant value tuning
             # coerce types
             try:
