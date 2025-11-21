@@ -29,7 +29,7 @@ def load_training_data(cfg_path):
 
     base_path = Path(cfg.get("training_file_path", "."))
     x_name = cfg.get("X_input")
-    y_name = cfg.get("Y_output")
+    y_name = cfg.get("Y_input")
 
     x_path = base_path / x_name
     y_path = base_path / y_name
