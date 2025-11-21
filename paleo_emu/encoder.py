@@ -111,7 +111,7 @@ class EncoderGenerator:
             print(f"[INFO] Y_flat standardized to mean ~0, std ~1")
 
     def _generate_pca_encoder(self):
-        n_components = self.model_config.encoder_config.get("n_components", 20)
+        n_components = self.model_config["encoder_config"].get("n_components", 20)
         model = PCA(n_components=n_components)
         Y_encoded = model.fit_transform(self.Y_norm)
         print(f"[INFO] PCA n_components_: {model.n_components_}")
@@ -120,12 +120,11 @@ class EncoderGenerator:
 
     def _generate_vae_encoder(self):
 
-        latent_dim = self.model_config.encoder_config.get("latent_dim", 256)
-        epochs = self.model_config.encoder_config.get("epochs", 150)
-        learning_rate = self.model_config.encoder_config.get("learning_rate", 1e-4)
-        batch_size = self.model_config.encoder_config.get("batch_size", 64)
-        kl_weight = self.model_config.encoder_config.get("kl_weight", 1.0)  # save it for β-VAE if needed
-
+        latent_dim = self.model_config["encoder_config"].get("latent_dim", 256)
+        epochs = self.model_config["encoder_config"].get("epochs", 150)
+        learning_rate = self.model_config["encoder_config"].get("learning_rate", 1e-4)
+        batch_size = self.model_config["encoder_config"].get("batch_size", 64)
+        kl_weight = self.model_config["encoder_config"].get("kl_weight", 1.0)  # save it for β-VAE if needed
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
         input_dim = self.Y_norm.shape[1]
         vae_model = VAE(input_dim, latent_dim)
@@ -169,9 +168,9 @@ class EncoderGenerator:
         return Y_encoded, model, self.mean_val, self.std_val
 
     def generate_encoder(self):
-        if self.model_config.encoder_config.encoder_type == "PCA":
+        if self.model_config["encoder_config"]["encoder_type"] == "PCA":
             return self._generate_pca_encoder()
-        elif self.model_config.encoder_config.encoder_type == "VAE":
+        elif self.model_config["encoder_config"]["encoder_type"] == "VAE":
             return self._generate_vae_encoder()
         else:
-            raise ValueError(f"Unknown encoder type: {self.model_config.encoder_config.encoder_type}")     
+            raise ValueError(f"Unknown encoder type: {self.model_config['encoder_config']['encoder_type']}")     

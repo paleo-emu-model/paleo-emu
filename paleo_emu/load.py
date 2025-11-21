@@ -1,59 +1,37 @@
 """
 This module provides functions to load training and forcing data for the paleo-EMU.
 """
+from sqlalchemy import column
 import yaml
 import xarray as xr
 import pandas as pd
 from pathlib import Path
+import os
 
-
-def load_training_data(cfg_path):
+def load_training_data(model_configuration):
     """
-    Load training data.
-    cfg_path: dict, path-to-yaml, or Path object.
-    Expects resolved config to provide:
-      - file_path (base dir)
-      - X_input (filename for .res)
-      - Y_output (filename for .nc)
-    Returns: X (DataFrame), Y_flat (ndarray), var_name, spatial_shape (lat,lon), lat_array, lon_array
+  
     """
-    # accept either a dict (already parsed) or a path to a yaml file
-    if isinstance(cfg_path, dict):
-        cfg = cfg_path
-    else:
-        cfg_file = Path(cfg_path)
-        if not cfg_file.exists():
-            raise FileNotFoundError(f"Config file not found: {cfg_path}")
-        with open(cfg_file, "r") as fh:
-            cfg = yaml.safe_load(fh)
-
-    base_path = Path(cfg.get("training_file_path", "."))
-    x_name = cfg.get("X_input")
-    y_name = cfg.get("Y_input")
-
-    x_path = base_path / x_name
-    y_path = base_path / y_name
-
-    if not x_path.exists():
-        raise FileNotFoundError(f"X input file not found: {x_path}")
-    if not y_path.exists():
-        raise FileNotFoundError(f"Y output file not found: {y_path}")
+    X_path = os.path.join(model_configuration.get("training_file_path"), model_configuration.get("X_input_file_name"))
+    Y_path = os.path.join(model_configuration.get("training_file_path"), model_configuration.get("Y_input_file_name"))  
 
     # read X (.res whitespace-delimited)
-    df = pd.read_csv(x_path, sep=r"\s+", header=None)
+    df = pd.read_csv(X_path, sep=r"\s+", header=None)
     # allow files with extra cols; ensure first five meaningful columns exist
     if df.shape[1] < 5:
-        raise ValueError(f"Unexpected X shape {df.shape} for {x_path}")
+        raise ValueError(f"Unexpected X shape {df.shape} for {X_path}")
+    
+    column_names = model_configuration.get("X_column_names")
     # name columns in expected order (if file already had header, user should adjust)
-    df.columns = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice'] + [f"c{i}" for i in range(df.shape[1]-5)]
-    X = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']]
+    df.columns = column_names + [f"c{i}" for i in range(df.shape[1]-5)]
+    X = df[column_names].values  # (n_samples, n_features)
 
     # read Y (netCDF)
-    ds = xr.open_dataset(y_path)
+    ds = xr.open_dataset(Y_path)
     var_name = list(ds.data_vars)[0]
     dims = ds[var_name].dims
     if len(dims) < 3:
-        raise ValueError(f"Unexpected Y dims {dims} in {y_path}")
+        raise ValueError(f"Unexpected Y dims {dims} in {Y_path}")
     Y = ds[var_name].values  # (n_samples, lat, lon)
     Y_flat = Y.reshape(Y.shape[0], -1)
     lat_name = dims[1]

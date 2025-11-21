@@ -19,28 +19,27 @@ variables:
 
 # training data file paths and names
 training_file_path: "examples/training_data/"
-X_input: "training_data_lowmodice_temp_formatted.res"
-Y_input: "training_data_lowmodice_temp_formatted.nc"
+X_input_file_name: "training_data_lowmodice_temp_formatted.res"
+Y_input_file_name: "training_data_lowmodice_temp_formatted.nc"
 
 # training_test.yaml
 save_path: examples/
 save_pipeline: false
 
-<<<<<<< Updated upstream
-# save log files path
+
+ save log files path
 log_path: "examples/logs/"
 output_dir: "examples/outputs/"
 
+X_column_names: ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
 
 forcing_data:
   file_path: "examples/forcing_data/"
   rcp85.1:
     forcing_input: "emul_inputs_RCP85.67.res"
-=======
 # forcing data paths
 forcing_data_folder: "examples/forcing_data/"
 forcing_input: "RCP85.1" #if empty use all forcings
->>>>>>> Stashed changes
 
 
 # configuration of parameters for emulator training
@@ -51,11 +50,11 @@ encoder_config:
   
 # configurations for regressors.
 regressor_config:
+  cv: 5 
   regressor_type: GPR
-  kernel: "RBF_White"
-  length_scales: [233.2825891498896, 0.0022671649797259587, 41.72075091907251, 58.57768264765239, 182.12070551134408]
-  noise_level: 0.0001
-  nu: 1.5
-  nugget_value: 0.000124748860119
-  constant_value: 0.06354351729633832
-  n_restarts_optimizer: 12
+  kernel_type: RBF
+  parameter_grid:
+    rbf_length_scale: [233.2825891498896, 0.0022671649797259587, 41.72075091907251, 58.57768264765239, 182.12070551134408]
+
+
+
