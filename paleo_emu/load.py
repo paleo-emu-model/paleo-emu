@@ -63,26 +63,29 @@ def load_training_data(cfg_path):
 
     return X, Y_flat, var_name, (Y.shape[1], Y.shape[2]), lat_array, lon_array
 
-def load_forcing_data(forcing_cfg,scenario="rcp85.1"):
+def load_forcing_data(model_cfg, scenario="rcp85.1"):
     """
-    forcing_cfg can be dict or path or key inside emulator.yaml forcing_data section.
+    model_cfg can be dict or path or key inside emulator.yaml forcing_data section.
     Expected keys: file_path, forcing_input
     """
-    cfg = forcing_cfg
+    cfg = model_cfg
     if not isinstance(cfg, dict):
         # load from yaml file
-        if isinstance(forcing_cfg, (str, Path)):
-            cfg_file = Path(forcing_cfg)
+        if isinstance(model_cfg, (str, Path)):
+            cfg_file = Path(model_cfg)
             if not cfg_file.exists():
-                raise FileNotFoundError(f"Forcing config file not found: {forcing_cfg}")
+                raise FileNotFoundError(f"Forcing config file not found: {model_cfg}")
             with open(cfg_file, "r") as fh:
                 cfg = yaml.safe_load(fh)
         else:
-            raise TypeError("forcing_cfg must be dict, str, or Path")
-        
+            raise TypeError("model_cfg must be dict, str, or Path")
+    
+    print(cfg)
     # now cfg should be dict
-    base = Path(cfg.get("file_path", "."))
-    forcing_input = cfg.get("scenarios", {}).get(scenario, {})
+    base = Path(cfg["forcing_data"]["file_path"])
+    scenario_cfg = cfg["forcing_data"].get(scenario)
+    forcing_input = scenario_cfg["forcing_input"]
+    print("[DEBUG]", forcing_input)
     if not forcing_input:
         raise KeyError("forcing config must include forcing_input")
 

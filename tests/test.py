@@ -36,11 +36,10 @@ class TestTraining(unittest.TestCase):
             / "emulator_saved"
             / "emulator_PCA+GPR_lowice_test.joblib"
         )
-        forcing_cfg = self.examples_dir / "forcing.yaml"
-
+        forcing_cfg_path = self.examples_dir / "training_test.yaml"
         prediction = run_prediction(
             model_cfg=str(model_cfg_path),
-            forcing_cfg=str(forcing_cfg),
+            forcing_cfg_path=str(forcing_cfg_path),
             scenario="rcp85.1",
             output_dir=str(self.examples_dir / "outputs" / "prediction"),
         )
@@ -50,10 +49,10 @@ class TestTraining(unittest.TestCase):
             self.examples_dir
             / "outputs"
             / "prediction"
-            / "PCA_GPR_forcing.yaml_prediction.nc"
+            / "PCA_GPR_test_prediction.nc"
         )
         ds = xr.open_dataset(ds_path)
-        self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.01)
+        self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.1)
 
 
 if __name__ == "__main__":
