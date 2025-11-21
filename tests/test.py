@@ -24,9 +24,7 @@ class TestTraining(unittest.TestCase):
         cfg_path = self.examples_dir / "training_test.yaml"
         emulatorPCAGPR = run_training(
             cfg_path=str(cfg_path),
-            regressor_type="GPR",
-            encoder="PCA",
-            save_pipeline=True,
+            save_pipeline=True
         )
 
     def test_run_prediction(self):
