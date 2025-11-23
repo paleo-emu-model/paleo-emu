@@ -1,38 +1,72 @@
 """
 This module provides functions to load training and forcing data for the paleo-EMU.
 """
+
+from pathlib import Path
+
 import yaml
 import xarray as xr
 import pandas as pd
-from pathlib import Path
-import os
 
-def load_training_data(model_configuration):
-    """
-  
-    """
-    X_path = os.path.join(model_configuration.get("training_file_path"), model_configuration.get("X_input_file_name"))
-    Y_path = os.path.join(model_configuration.get("training_file_path"), model_configuration.get("Y_input_file_name"))  
+from paleo_emu.load_config import _Config  
 
-    # read X (.res whitespace-delimited)
+def load_training_data(model_configuration: _Config):
+    """
+    Load X (forcing/inputs) and Y (target fields) for training.
+
+    Parameters
+    ----------
+    model_configuration : _Config 
+
+    Returns
+    -------
+    X : ndarray, shape (n_samples, n_features)
+    Y_flat : ndarray, shape (n_samples, n_lat * n_lon)
+    var_name : str
+        Name of the variable in the NetCDF file.
+    spatial_shape : tuple
+        (n_lat, n_lon)
+    lat_array : ndarray
+    lon_array : ndarray
+    """
+
+    training_dir = model_configuration.training_file_path
+    X_name = model_configuration.X_input_file_name
+    Y_name = model_configuration.Y_input_file_name
+    column_names = model_configuration.X_column_names
+
+    training_dir = Path(training_dir)
+    X_path = training_dir / X_name
+    Y_path = training_dir / Y_name
+
+    # ---- Load X (.res whitespace-delimited) ----
     df = pd.read_csv(X_path, sep=r"\s+", header=None)
-    # allow files with extra cols; ensure first five meaningful columns exist
-    if df.shape[1] < 5:
-        raise ValueError(f"Unexpected X shape {df.shape} for {X_path}")
-    
-    column_names = model_configuration.get("X_column_names")
-    # name columns in expected order (if file already had header, user should adjust)
-    df.columns = column_names + [f"c{i}" for i in range(df.shape[1]-5)]
+
+    n_features = len(column_names)
+    if df.shape[1] < n_features:
+        raise ValueError(
+            f"Unexpected X shape {df.shape} for {X_path} "
+            f"(needs at least {n_features} columns)"
+        )
+
+    # Name columns: the first n_features are the meaningful ones,
+    # any extra columns get generic names c0, c1, ...
+    extra_cols = df.shape[1] - n_features
+    df.columns = column_names + [f"c{i}" for i in range(extra_cols)]
+
     X = df[column_names].values  # (n_samples, n_features)
 
-    # read Y (netCDF)
+    # ---- Load Y (NetCDF) ----
     ds = xr.open_dataset(Y_path, engine="h5netcdf")
     var_name = list(ds.data_vars)[0]
+
     dims = ds[var_name].dims
     if len(dims) < 3:
         raise ValueError(f"Unexpected Y dims {dims} in {Y_path}")
+
     Y = ds[var_name].values  # (n_samples, lat, lon)
     Y_flat = Y.reshape(Y.shape[0], -1)
+
     lat_name = dims[1]
     lon_name = dims[2]
     lat_array = ds[lat_name].values
