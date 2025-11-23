@@ -80,7 +80,7 @@ class TrainingGenerator:
             )
 
         # Encode Y and get decoder / normalization stats
-        enc = EncoderGenerator(self.Y_train, self.cfg.model_dump())
+        enc = EncoderGenerator(self.Y_train, self.cfg)
         Y_train_encoded, decoder, mean_val, std_val = enc.generate_encoder()
 
         # Build regressor, param_grid, and pipeline

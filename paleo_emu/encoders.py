@@ -7,6 +7,13 @@ from sklearn.decomposition import PCA
 from tensorflow.keras import layers, models
 import keras
 
+from paleo_emu.load_config import (
+    PaleoEmuConfig,
+    _PCAEncoderConfig,
+    _LearnedEncoderConfig,
+)
+
+
 @keras.saving.register_keras_serializable()
 class _VAE(keras.Model):
     def __init__(self, input_dim, latent_dim):
@@ -107,6 +114,7 @@ def _save_vae_log(epoch_losses, latent_dim, epochs, learning_rate, batch_size, k
     print(f"[INFO] Hyperparameter log updated: {log_file}")
 
 
+
 class EncoderGenerator:
     """Utility for building PCA or VAE encoders from data.
 
@@ -114,18 +122,12 @@ class EncoderGenerator:
     ----------
     Y : array-like, shape (n_samples, n_features)
         Input data to be encoded.
-    model_config : object
-        Configuration file with encoder parameters.
-        Example:
+    model_config : PaleoEmuConfig
+        Typed configuration object with encoder parameters. Its
+        `encoder_config` field is either:
+        - _PCAEncoderConfig (for PCA)
+        - _LearnedEncoderConfig (for VAE / learned encoder)
 
-            model_config = type('C', (), {
-                'encoder_config': {'encoder_type': pca, 'n_components': 10},
-            })()
-
-            model_config = type('C', (), {
-                'encoder_config': {'encoder_type': vae, 'epochs': 10},
-            })()
-            
     Attributes
     ----------
     mean_val : float
@@ -134,73 +136,103 @@ class EncoderGenerator:
         Standard deviation of flattened input used for normalization.
     Y_norm : ndarray
         Normalized input data (same shape as `Y`).
-
-    Examples
-    --------
-    Minimal usage showing PCA and VAE:
-    >>> import numpy as np
-    >>> from paleo_emu.encoder import EncoderGenerator
-    >>> Y = np.random.randn(100, 50)
-    >>> pca_config = type('C', (), {'pca': {'n_components': 10}})()
-    >>> enc = EncoderGenerator(Y, pca_config)
-    >>> Y_pca, pca_model, mean, std = enc.generate_encoder()
-    >>> vae_config = type('C', (), {'vae': {'latent_dim': 64, 'epochs': 10}})()
-    >>> enc = EncoderGenerator(Y, vae_config)
-    >>> Y_pca, pca_model, mean, std = enc.generate_encoder()
-
-    
     """
 
-    def __init__(self, Y, model_config):
-            """Create an EncoderGenerator and compute normalization stats."""
-            self.model_config = model_config
-            # Keep a flat copy for global statistics and compute normalization
-            self.Y_flat = np.asarray(Y).ravel()
-            self.mean_val = np.mean(self.Y_flat)
-            self.std_val = np.std(self.Y_flat)
-            self.Y_norm = (np.asarray(Y) - self.mean_val) / self.std_val + 1e-99  # avoid exact zeros
-            print(f"[INFO] Raw Y_flat min={np.min(self.Y_flat)}, max={np.max(self.Y_flat)}, mean={np.mean(self.Y_flat)}, std={np.std(self.Y_flat)}")
-            print(f"[INFO] Y_flat standardized to mean ~0, std ~1")
+    def __init__(self, Y, model_config: PaleoEmuConfig):
+        """Create an EncoderGenerator and compute normalization stats."""
+        if not isinstance(model_config, PaleoEmuConfig):
+            raise TypeError(
+                f"model_config must be a PaleoEmuConfig, got {type(model_config)}"
+            )
 
+        self.cfg: PaleoEmuConfig = model_config
+        self.encoder_cfg = self.cfg.encoder_config
+
+        # Keep a flat copy for global statistics and compute normalization
+        self.Y_flat = np.asarray(Y).ravel()
+        self.mean_val = np.mean(self.Y_flat)
+        self.std_val = np.std(self.Y_flat)
+        self.Y_norm = (np.asarray(Y) - self.mean_val) / self.std_val + 1e-99  # avoid exact zeros
+
+        print(
+            f"[INFO] Raw Y_flat min={np.min(self.Y_flat)}, "
+            f"max={np.max(self.Y_flat)}, mean={np.mean(self.Y_flat)}, "
+            f"std={np.std(self.Y_flat)}"
+        )
+        print("[INFO] Y_flat standardized to mean ~0, std ~1")
+
+    # ------------------------------------------------------------------
+    # PCA encoder
+    # ------------------------------------------------------------------
     def _generate_pca_encoder(self):
-        n_components = self.model_config["encoder_config"].get("n_components", 20)
+        if not isinstance(self.encoder_cfg, _PCAEncoderConfig):
+            raise TypeError(
+                f"_generate_pca_encoder called with wrong encoder config type: "
+                f"{type(self.encoder_cfg)}"
+            )
+
+        # Pydantic guarantees at least one of these is set
+        if self.encoder_cfg.n_components is not None:
+            n_components = self.encoder_cfg.n_components
+        else:
+            # use variance ratio as n_components parameter for PCA
+            n_components = self.encoder_cfg.pca_variance_ratio
+
         model = PCA(n_components=n_components)
         Y_encoded = model.fit_transform(self.Y_norm)
+
         print(f"[INFO] PCA n_components_: {model.n_components_}")
-        print(f"[INFO] Sum explained variance: {np.sum(model.explained_variance_ratio_)}")
+        print(
+            f"[INFO] Sum explained variance: "
+            f"{np.sum(model.explained_variance_ratio_)}"
+        )
+
         return Y_encoded, model, self.mean_val, self.std_val
 
+    # ------------------------------------------------------------------
+    # VAE encoder
+    # ------------------------------------------------------------------
     def _generate_vae_encoder(self):
+        if not isinstance(self.encoder_cfg, _LearnedEncoderConfig):
+            raise TypeError(
+                f"_generate_vae_encoder called with wrong encoder config type: "
+                f"{type(self.encoder_cfg)}"
+            )
 
-        latent_dim = self.model_config["encoder_config"].get("latent_dim", 256)
-        epochs = self.model_config["encoder_config"].get("epochs", 150)
-        learning_rate = self.model_config["encoder_config"].get("learning_rate", 1e-4)
-        batch_size = self.model_config["encoder_config"].get("batch_size", 64)
-        kl_weight = self.model_config["encoder_config"].get("kl_weight", 1.0)  # save it for β-VAE if needed
+        latent_dim = self.encoder_cfg.latent_dim
+        epochs = self.encoder_cfg.epochs
+        learning_rate = self.encoder_cfg.learning_rate
+        batch_size = self.encoder_cfg.batch_size
+        kl_weight = self.encoder_cfg.kl_weight  # for β-VAE if needed
+
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
         input_dim = self.Y_norm.shape[1]
         vae_model = _VAE(input_dim, latent_dim)
 
-        dataset = tf.data.Dataset.from_tensor_slices((self.Y_norm.astype('float32')))
+        dataset = tf.data.Dataset.from_tensor_slices(
+            self.Y_norm.astype("float32")
+        )
         dataset = dataset.shuffle(buffer_size=1024).batch(batch_size)
 
         epoch_losses = []
 
         for epoch in range(epochs):
-            total_loss = 0
+            total_loss = 0.0
             for step, x_batch in enumerate(dataset):
                 with tf.GradientTape() as tape:
                     x_decoded, mean, logvar = vae_model(x_batch)
-                    loss = _compute_vae_loss(x_batch, x_decoded, mean, logvar) * kl_weight  # save it for β-VAE if needed
+                    loss = _compute_vae_loss(
+                        x_batch, x_decoded, mean, logvar
+                    ) * kl_weight
 
                 grads = tape.gradient(loss, vae_model.trainable_variables)
                 optimizer.apply_gradients(zip(grads, vae_model.trainable_variables))
-                total_loss += loss
+                total_loss += float(loss.numpy())
 
             avg_loss = total_loss / (step + 1)
-            epoch_losses.append(avg_loss.numpy())
+            epoch_losses.append(avg_loss)
 
-            if epoch % 10 == 0 or epoch == epochs-1:
+            if epoch % 10 == 0 or epoch == epochs - 1:
                 print(f"[VAE] Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}")
 
         _save_vae_log(
@@ -209,9 +241,10 @@ class EncoderGenerator:
             epochs=epochs,
             learning_rate=learning_rate,
             batch_size=batch_size,
-            kl_weight=kl_weight
+            kl_weight=kl_weight,
         )
 
+        # Encode full dataset with trained encoder
         mean_logvar = vae_model.encoder(self.Y_norm)
         mean, logvar = tf.split(mean_logvar, num_or_size_splits=2, axis=1)
         Y_encoded = mean.numpy()
@@ -219,10 +252,16 @@ class EncoderGenerator:
 
         return Y_encoded, model, self.mean_val, self.std_val
 
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
     def generate_encoder(self):
-        if self.model_config["encoder_config"]["encoder_type"] == "PCA":
+        """Generate encoded representation according to encoder_config."""
+        if isinstance(self.encoder_cfg, _PCAEncoderConfig):
             return self._generate_pca_encoder()
-        elif self.model_config["encoder_config"]["encoder_type"] == "VAE":
+        elif isinstance(self.encoder_cfg, _LearnedEncoderConfig):
             return self._generate_vae_encoder()
         else:
-            raise ValueError(f"Unknown encoder type: {self.model_config['encoder_config']['encoder_type']}")     
+            raise TypeError(
+                f"Unknown encoder_config type: {type(self.encoder_cfg)}"
+            )
