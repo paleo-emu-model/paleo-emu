@@ -143,6 +143,7 @@ class _CVConfig(BaseModel):
         return v
 
 # Top-level config
+
 class _Config(BaseModel):
     regressor_config: _RegressorConfig
     cv: _CVConfig
@@ -150,6 +151,19 @@ class _Config(BaseModel):
     model_run_name: str
     # encoder_config can be either PCA-style or learned-encoder-style
     encoder_config: Union[_PCAEncoderConfig, _LearnedEncoderConfig]
+
+    training_file_path: Path
+    X_input_file_name: str
+    Y_input_file_name: str
+    X_column_names: List[str]
+
+    @field_validator("X_column_names")
+    @classmethod
+    def validate_x_column_names(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("X_column_names must not be empty")
+        return v
+
 
 def load_config(path: str) -> _Config:
     """
@@ -161,4 +175,3 @@ def load_config(path: str) -> _Config:
 
     # Pydantic v2 does all structural + semantic checks here
     return _Config(**raw)
-
