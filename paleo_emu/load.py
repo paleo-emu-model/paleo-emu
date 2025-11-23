@@ -26,7 +26,7 @@ def load_training_data(model_configuration):
     X = df[column_names].values  # (n_samples, n_features)
 
     # read Y (netCDF)
-    ds = xr.open_dataset(Y_path)
+    ds = xr.open_dataset(Y_path, engine="h5netcdf")
     var_name = list(ds.data_vars)[0]
     dims = ds[var_name].dims
     if len(dims) < 3:
