@@ -15,7 +15,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 import joblib  
 
-from paleo_emu.encoder import EncoderGenerator
+from paleo_emu.encoders import EncoderGenerator
 from paleo_emu.load_config import PaleoEmuConfig, _RegressorConfig, make_kernel
 
 
