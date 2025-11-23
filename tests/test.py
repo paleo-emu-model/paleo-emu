@@ -3,40 +3,46 @@ from pathlib import Path
 import unittest
 
 from paleo_emu.training import TrainingGenerator
-from paleo_emu.load_config import load_config   
-from paleo_emu.load import load_training_data 
+from paleo_emu.load_config import load_config
+from paleo_emu.load import load_training_data
+
 
 class TestTraining(unittest.TestCase):
-
-    def __init__(self, methodName="runTest"):
-        super().__init__(methodName)
-
+    def setUp(self):
         # Directory of this test file: .../tests
         here = Path(__file__).resolve().parent
 
         # Repo root (one level up from tests/)
-        repo_root = here.parent
+        self.repo_root = here.parent
 
         # Path to examples directory
-        self.examples_dir = repo_root / "examples"
-        model_cfg_path = repo_root / "tests" / "test.yaml"
+        self.examples_dir = self.repo_root / "examples"
 
-        # Use the typed loader (no direct yaml.safe_load)
-        self.cfg = load_config(str(model_cfg_path))
+    def _run_training_with_cfg(self, cfg_filename: str):
+        model_cfg_path = self.repo_root / "tests" / cfg_filename
 
-        # Simple synthetic training data for the test
-        self.X_train, self.Y_train, _, _, lat_array, lon_array = load_training_data(self.cfg)
+        # Use the typed loader (PaleoEmuConfig)
+        cfg = load_config(str(model_cfg_path))
 
-    def test_run_training(self):
+        # Load full training data from disk
+        X_train, Y_train, _, _, lat_array, lon_array = load_training_data(cfg)
+
         training = TrainingGenerator(
-            self.cfg,
-            self.X_train,
-            self.Y_train,
+            cfg,
+            X_train,
+            Y_train,
             output_dir=str(self.examples_dir),
         )
         artifact_path = training.run_training()
-        # If run_training returns a path, assert it exists
         self.assertTrue(os.path.exists(artifact_path))
+
+    def test_run_training_pca(self):
+        """Full training run using PCA encoder config."""
+        self._run_training_with_cfg("test_PCA.yml")
+
+    def test_run_training_vae(self):
+        """Full training run using VAE (learned encoder) config."""
+        self._run_training_with_cfg("test_VAE.yml")
 
 
 if __name__ == "__main__":

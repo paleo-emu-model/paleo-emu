@@ -19,6 +19,8 @@ encoder_config:
 regressor_config:
   kernels:
     - RBF
+    - Matern_nu_15
+    - Matern_nu_25
   n_restarts_optimizer: 3
   whitekernel_noise_level: 1e-2
   whitekernel_noise_level_bounds: [1e-5, 1e1]
