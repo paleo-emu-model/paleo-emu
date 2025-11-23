@@ -41,7 +41,7 @@ from paleo_emu.load import load_training_data
 from paleo_emu.regressor import build_regressor
 from paleo_emu.plotting import plot_r2_map_with_latlon, plot_histogram_4_leave1out
 from paleo_emu.validation import compute_r2_map
-from paleo_emu.encoder import EncoderGenerator  
+from paleo_emu.encoders import EncoderGenerator  
 
 
 def run_training(cfg_path, X_train=None, Y_train=None):

@@ -5,7 +5,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from load_config import load_config, make_kernel
+from paleo_emu.load_config import load_config, make_kernel
 
 # ---- 1. Load & validate config ----
 cfg = load_config("./paleo_emu/config.yaml")
