@@ -4,7 +4,59 @@ import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from paleo_emu.vae import VAE
+from tensorflow.keras import layers, models
+import keras
+
+@keras.saving.register_keras_serializable()
+class _VAE(keras.Model):
+    def __init__(self, input_dim, latent_dim):
+        super(_VAE, self).__init__()
+        self.latent_dim = latent_dim
+        self.input_dim = input_dim
+        # encoder
+        self.encoder = models.Sequential([
+            layers.InputLayer(input_shape=(input_dim,)),    # input_dim=7008
+            layers.Dense(4096, activation="relu"),           # 7008 → 4096
+            layers.Dense(2048, activation="relu"),           # 4096 → 2048
+            layers.Dense(4096, activation="relu"),           # 2048 → 4096
+            layers.Dense(latent_dim * 2)                     # gives mean and logvar
+        ])
+        # decoder
+        self.decoder = models.Sequential([
+            layers.InputLayer(input_shape=(latent_dim,)),
+            layers.Dense(4096, activation="relu"),
+            layers.Dense(2048, activation="relu"),
+            layers.Dense(2048, activation="relu"),   
+            layers.Dense(1024, activation="relu"),
+            layers.Dense(7008)
+        ])
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'input_dim': self.input_dim,
+            'latent_dim': self.latent_dim,
+        })
+        return config
+    
+    @classmethod
+    def from_config(cls, config):
+        # Filter out Keras-specific parameters that aren't VAE constructor arguments
+        vae_config = {k: v for k, v in config.items()
+                      if k in ['input_dim', 'latent_dim']}  # Add your actual constructor params
+        return cls(**vae_config)
+    
+    def reparameterize(self, mean, logvar):
+        batch = tf.shape(mean)[0]
+        dim = tf.shape(mean)[1]
+        eps = tf.random.normal(shape=(batch, dim))
+        return eps * tf.exp(logvar * 0.5) + mean
+
+    def call(self, x):
+        x_encoded = self.encoder(x)
+        mean, logvar = tf.split(x_encoded, num_or_size_splits=2, axis=1)
+        z = self.reparameterize(mean, logvar)
+        x_decoded = self.decoder(z)
+        return x_decoded, mean, logvar
 
 def _compute_vae_loss(x, x_decoded, mean, logvar):
     reconstruction_loss = tf.reduce_mean(tf.square(x - x_decoded))
@@ -127,7 +179,7 @@ class EncoderGenerator:
         kl_weight = self.model_config["encoder_config"].get("kl_weight", 1.0)  # save it for β-VAE if needed
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
         input_dim = self.Y_norm.shape[1]
-        vae_model = VAE(input_dim, latent_dim)
+        vae_model = _VAE(input_dim, latent_dim)
 
         dataset = tf.data.Dataset.from_tensor_slices((self.Y_norm.astype('float32')))
         dataset = dataset.shuffle(buffer_size=1024).batch(batch_size)
