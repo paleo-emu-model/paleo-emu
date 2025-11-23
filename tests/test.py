@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 
 from paleo_emu.training import TrainingGenerator
-from paleo_emu.load_config import load_config
+from paleo_emu.config import load_config
 from paleo_emu.load import load_training_data
 
 

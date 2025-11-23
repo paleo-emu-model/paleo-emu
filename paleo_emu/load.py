@@ -8,7 +8,7 @@ import yaml
 import xarray as xr
 import pandas as pd
 
-from paleo_emu.load_config import PaleoEmuConfig 
+from paleo_emu.config import PaleoEmuConfig 
 
 def load_training_data(model_configuration: PaleoEmuConfig):
     """

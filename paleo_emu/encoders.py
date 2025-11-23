@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from tensorflow.keras import layers, models
 import keras
 
-from paleo_emu.load_config import (
+from paleo_emu.config import (
     PaleoEmuConfig,
     _PCAEncoderConfig,
     _LearnedEncoderConfig,
