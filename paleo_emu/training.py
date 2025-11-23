@@ -2,7 +2,7 @@
 Training module using chosen regressors, kernels, and encoders.
 
 See config loader (_load.py / config_loader.py) for the typed config:
-- _Config
+- PaleoEmuConfig
 - _RegressorConfig
 - make_kernel
 """
@@ -16,7 +16,7 @@ from sklearn.preprocessing import StandardScaler
 import joblib  
 
 from paleo_emu.encoder import EncoderGenerator
-from paleo_emu.load_config import _Config, _RegressorConfig, make_kernel
+from paleo_emu.load_config import PaleoEmuConfig, _RegressorConfig, make_kernel
 
 
 class TrainingGenerator:
@@ -24,7 +24,7 @@ class TrainingGenerator:
 
     Parameters
     ----------
-    model_configuration : _Config
+    model_configuration : PaleoEmuConfig
         Typed configuration object loaded via `load_config(path)`.
     X_train : array-like, shape (n_samples, n_features)
     Y_train : array-like, shape (n_samples,)
@@ -39,9 +39,9 @@ class TrainingGenerator:
     - "std_val": std of Y used in encoding
     """
 
-    def __init__(self, model_configuration: _Config, X_train=None, Y_train=None,
+    def __init__(self, model_configuration: PaleoEmuConfig, X_train=None, Y_train=None,
                  output_dir: str = "."):
-        self.cfg: _Config = model_configuration
+        self.cfg: PaleoEmuConfig = model_configuration
         self.X_train = X_train
         self.Y_train = Y_train
         self.output_dir = output_dir

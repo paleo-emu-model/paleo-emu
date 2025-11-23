@@ -8,15 +8,15 @@ import yaml
 import xarray as xr
 import pandas as pd
 
-from paleo_emu.load_config import _Config  
+from paleo_emu.load_config import PaleoEmuConfig 
 
-def load_training_data(model_configuration: _Config):
+def load_training_data(model_configuration: PaleoEmuConfig):
     """
     Load X (forcing/inputs) and Y (target fields) for training.
 
     Parameters
     ----------
-    model_configuration : _Config 
+    model_configuration : PaleoEmuConfig 
 
     Returns
     -------

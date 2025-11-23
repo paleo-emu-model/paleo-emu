@@ -144,7 +144,7 @@ class _CVConfig(BaseModel):
 
 # Top-level config
 
-class _Config(BaseModel):
+class PaleoEmuConfig(BaseModel):
     regressor_config: _RegressorConfig
     cv: _CVConfig
     random_state: int
@@ -165,7 +165,7 @@ class _Config(BaseModel):
         return v
 
 
-def load_config(path: str) -> _Config:
+def load_config(path: str) -> PaleoEmuConfig:
     """
     Load and validate YAML config. Raises ValidationError or yaml.YAMLError
     if something is wrong.
@@ -174,4 +174,4 @@ def load_config(path: str) -> _Config:
         raw = yaml.safe_load(f)
 
     # Pydantic v2 does all structural + semantic checks here
-    return _Config(**raw)
+    return PaleoEmuConfig(**raw)
