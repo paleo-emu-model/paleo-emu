@@ -1,11 +1,10 @@
 import os
 from pathlib import Path
 import unittest
-import xarray as xr
-# from paleo_emu.prediction import run_prediction
+
 from paleo_emu.training import TrainingGenerator
-from paleo_emu.load import load_training_data
-import yaml as YAML
+from paleo_emu.load_config import load_config   
+from paleo_emu.load import load_training_data 
 
 class TestTraining(unittest.TestCase):
 
@@ -20,42 +19,24 @@ class TestTraining(unittest.TestCase):
 
         # Path to examples directory
         self.examples_dir = repo_root / "examples"
-        model_cfg_path = self.examples_dir / "training_test.yaml"
+        model_cfg_path = repo_root / "tests" / "test.yaml"
 
-        with open(model_cfg_path, "r") as file:
-            self.model_config = YAML.safe_load(file)
+        # Use the typed loader (no direct yaml.safe_load)
+        self.cfg = load_config(str(model_cfg_path))
 
-        self.X_train, self.Y_train, _, _, lat_array, lon_array = load_training_data(self.model_config)
-
+        # Simple synthetic training data for the test
+        self.X_train, self.Y_train, _, _, lat_array, lon_array = load_training_data(self.cfg)
 
     def test_run_training(self):
-        training = TrainingGenerator(self.model_config, self.X_train, self.Y_train)
-        training.run_training()
-
-    # def test_run_prediction(self):
-    #     model_cfg_path = (
-    #         self.examples_dir
-    #         / "outputs"
-    #         / "emulator_saved"
-    #         / "emulator_PCA+GPR_lowice_test.joblib"
-    #     )
-    #     forcing_cfg_path = self.examples_dir / "training_test.yaml"
-    #     prediction = run_prediction(
-    #         model_cfg=str(model_cfg_path),
-    #         forcing_cfg_path=str(forcing_cfg_path),
-    #         scenario="rcp85.1",
-    #         output_dir=str(self.examples_dir / "outputs" / "prediction"),
-    #     )
-
-    # def test_model_output(self):
-    #     ds_path = (
-    #         self.examples_dir
-    #         / "outputs"
-    #         / "prediction"
-    #         / "PCA_GPR_test_prediction.nc"
-    #     )
-    #     ds = xr.open_dataset(ds_path)
-    #     self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.1)
+        training = TrainingGenerator(
+            self.cfg,
+            self.X_train,
+            self.Y_train,
+            output_dir=str(self.examples_dir),
+        )
+        artifact_path = training.run_training()
+        # If run_training returns a path, assert it exists
+        self.assertTrue(os.path.exists(artifact_path))
 
 
 if __name__ == "__main__":
