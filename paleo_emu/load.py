@@ -1,7 +1,6 @@
 """
 This module provides functions to load training and forcing data for the paleo-EMU.
 """
-from sqlalchemy import column
 import yaml
 import xarray as xr
 import pandas as pd
