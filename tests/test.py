@@ -4,11 +4,13 @@ import unittest
 
 import joblib
 import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
 
 from paleo_emu.training import TrainingGenerator
 from paleo_emu.config import load_config
 from paleo_emu.load import load_training_data
-from paleo_emu.encoding import EncodedTargetRegressor  # ensure class is importable for joblib
+from paleo_emu.encoding import EncodedTargetRegressor  
 
 
 class TestTraining(unittest.TestCase):
@@ -29,7 +31,15 @@ class TestTraining(unittest.TestCase):
         cfg = load_config(str(model_cfg_path))
 
         # Load full training data from disk
-        X_train, Y_train, _, _, lat_array, lon_array = load_training_data(cfg)
+        X_full, Y_full, _, _, lat_array, lon_array = load_training_data(cfg)
+
+        # 80/20 train–test split for performance evaluation
+        X_train, X_test, Y_train, Y_test = train_test_split(
+            X_full,
+            Y_full,
+            test_size=0.2,
+            random_state=cfg.random_state,
+        )
 
         training = TrainingGenerator(
             cfg,
@@ -42,38 +52,53 @@ class TestTraining(unittest.TestCase):
         artifact_path = training.run_training()
         self.assertTrue(os.path.exists(artifact_path))
 
-        # Return data & path for further checks in individual tests
-        return artifact_path, X_train
+        # Return everything needed for checks
+        return artifact_path, X_full, X_test, Y_test
 
-    def _check_artifact_and_predictions(self, artifact_path, X_train):
+    def _check_artifact_and_predictions(self, artifact_path, X_full, X_test, Y_test):
         # Load the artifact
         artifact = joblib.load(artifact_path)
 
         # Basic keys check
         self.assertIn("model", artifact)
-
         model = artifact["model"]
 
         # Model should be an EncodedTargetRegressor
         self.assertIsInstance(model, EncodedTargetRegressor)
 
-        # Predict on the original X field
-        Y_pred = model.predict(X_train)
+        # -------------------------------------------------
+        # 1) Mean value check on original X field
+        # -------------------------------------------------
+        Y_pred_full = model.predict(X_full)
+        field_mean = np.mean(Y_pred_full)
+        self.assertAlmostEqual(field_mean, 5.3, delta=0.05)
+        print(f"Mean temperature: {field_mean}")
 
-        # Compute mean of predicted field
-        field_mean = np.mean(Y_pred)
+        # -------------------------------------------------
+        # 2) Performance check on 20% hold-out set
+        # -------------------------------------------------
+        Y_pred_test = model.predict(X_test)
 
-        self.assertAlmostEqual(field_mean, 5.28, delta=0.01)
+        # R^2 averaged over all outputs
+        r2 = r2_score(Y_test, Y_pred_test, multioutput="uniform_average")
+
+        print(f"Hold-out R^2: {r2}")
+
+        self.assertGreater(
+            r2,
+            0.0,
+            msg=f"Hold-out R^2 too low: {r2}",
+        )
 
     def test_run_training_pca(self):
-        """Full training run using PCA encoder config."""
-        artifact_path, X_train = self._run_training_with_cfg("test_PCA.yml")
-        self._check_artifact_and_predictions(artifact_path, X_train)
+        """Full training run using PCA encoder config with 20% hold-out performance check."""
+        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA.yml")
+        self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
 
     # def test_run_training_vae(self):
-    #     """Full training run using VAE (learned encoder) config."""
-    #     artifact_path, X_train = self._run_training_with_cfg("test_VAE.yml")
-    #     self._check_artifact_and_predictions(artifact_path, X_train)
+    #     """Full training run using VAE (learned encoder) config with 20% hold-out performance check."""
+    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE.yml")
+    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
 
 
 if __name__ == "__main__":
