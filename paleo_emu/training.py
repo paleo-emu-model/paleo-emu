@@ -1,42 +1,22 @@
 """
-This module is to train models using chosen regressors, kernels, and encoders.
-2 methods are used here: 2:8 validation; leave-one-out cross-validation.
-leave_one_out has a recurring loop which needs i to be looped, so need to write another function for it.
-2:8 validation doesn't require a function for looping, so it will only give one pipeline fitted model
+Training module using chosen regressors, kernels, and encoders.
 
-procedures of training:
-1. load data
-2. split data
-3. encode training data (giving decoder in the mean time)
-4. process test Y for validation later
-5. fit model (pipline)
-6. validation -> predict using test X
-              -> compare with test Y
+See config loader (_load.py / config_loader.py) for the typed config:
+- _Config
+- _RegressorConfig
+- make_kernel
 """
-# training process needs to give info like pipeline contains 
-# the trained model, decoder, std_val, and mean_val, which are used in the following prediction process
 
-
-from tabnanny import verbose
-import numpy as np
-import xarray as xr
 import os
-import time
 
-import tensorflow as tf
-
-
-from sklearn.multioutput import MultiOutputRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import r2_score
-import joblib
-from sklearn.gaussian_process.kernels import  (RBF, Matern, ConstantKernel as C, WhiteKernel)
+import joblib  
 
-from paleo_emu import regressor
-from paleo_emu.encoder import EncoderGenerator  
+from paleo_emu.encoder import EncoderGenerator
+from paleo_emu.load_config import _Config, _RegressorConfig, make_kernel
 
 
 class TrainingGenerator:
@@ -44,65 +24,107 @@ class TrainingGenerator:
 
     Parameters
     ----------
-    cfg: a configuration object loaded from a YAML file.
-    X_train : array-like, shape (n_samples, n_features), optional
-        Input features for training. If None, data will be loaded from cfg_path.
-    Y_train : array-like, shape (n_samples, n_targets), optional
-        Target values for training. If None, data will be loaded from cfg_path.
+    model_configuration : _Config
+        Typed configuration object loaded via `load_config(path)`.
+    X_train : array-like, shape (n_samples, n_features)
+    Y_train : array-like, shape (n_samples,)
+    output_dir : str, optional
+        Directory to save the joblib artifact. Defaults to current directory.
 
-    Returns
-    -------
-    fitted_pipeline : object
-        The trained sklearn Pipeline containing the scaler and regressor.
+    The joblib artifact will contain:
+    - "pipeline": best fitted sklearn Pipeline (scaler + GPR)
+    - "grid_search": fitted GridSearchCV
+    - "decoder": decoder from EncoderGenerator
+    - "mean_val": mean of Y used in encoding
+    - "std_val": std of Y used in encoding
     """
 
-    def __init__(self, model_configuration, X_train=None, Y_train=None):
-        """Create a TrainingGenerator."""
-        self.model_configuration = model_configuration
+    def __init__(self, model_configuration: _Config, X_train=None, Y_train=None,
+                 output_dir: str = "."):
+        self.cfg: _Config = model_configuration
         self.X_train = X_train
         self.Y_train = Y_train
+        self.output_dir = output_dir
 
+    # ----------------- helpers -----------------
+    def _build_kernel_candidates(self):
+        reg_cfg: _RegressorConfig = self.cfg.regressor_config
+        return [make_kernel(name, reg_cfg) for name in reg_cfg.kernels]
 
-    def run_training(self):
+    def _build_param_grid(self):
+        kernels = self._build_kernel_candidates()
+        # Pipeline step is named "regressor"
+        return {"regressor__kernel": kernels}
 
-        print("X_train or Y_train is None, loading training data from model_configuration...")
-        enc = EncoderGenerator(self.Y_train, self.model_configuration)
-        Y_train_encoded, decoder, mean_val, std_val = enc.generate_encoder()
-
-        if self.model_configuration["regressor_config"]["regressor_type"] == "GPR":   
-            # setup a switch for different kernel types
-            # if k1__k1__ is 1.0/0.0, then use/notuse RBF 
-            # if k1__k2__ is 1.0/0.0, then use/notuse Matern
-            # if k3__ is 1.0/0.0, then use/notuse WhiteKernel
-            if self.model_configuration["regressor_config"]["kernel_type"] == "RBF":
-                kernel = C(1.0) * RBF(length_scale=1.0)
-                param_grid={
-                    'regressor__kernel__k2__length_scale' : self.model_configuration["regressor_config"]["parameter_grid"]["rbf_length_scale"],
-                }
-
-
-            regressor = GaussianProcessRegressor(kernel=kernel)
-
-        model_pipeline = Pipeline([
-            ("scaler", StandardScaler()),
-            ("regressor", regressor)
-        ])
-
-        model = GridSearchCV(
-            estimator=model_pipeline,
-            param_grid=param_grid,
-            cv=self.model_configuration["regressor_config"].get('cv', 5)
+    def _build_regressor(self) -> GaussianProcessRegressor:
+        reg_cfg: _RegressorConfig = self.cfg.regressor_config
+        return GaussianProcessRegressor(
+            normalize_y=True,
+            n_restarts_optimizer=reg_cfg.n_restarts_optimizer,
+            random_state=self.cfg.random_state,
         )
 
-        model.fit(self.X_train, Y_train_encoded)
-        
-        print(model.best_params_)
+    # ----------------- main training -----------------
+    def run_training(self) -> str:
+        """Run training and export results as a joblib file.
 
-        if self.model_configuration["save_pipeline"]:
-        # Save metadata as a YAML file (meta already converted to native types)
-            pipeline_path = os.path.join(self.model_configuration["save_path"], "fitted_pipeline.joblib")
+        Returns
+        -------
+        artifact_path : str
+            Path to the saved joblib artifact.
+        """
+        if self.X_train is None or self.Y_train is None:
+            raise ValueError(
+                "X_train and Y_train must be provided. "
+                "Automatic data loading is not implemented here."
+            )
 
-            with open(pipeline_path, "wb") as f:
-                joblib.dump(model, f)
-            print(f"[INFO] Fitted pipeline saved to {pipeline_path}")
+        # 1–4. Encode Y and get decoder / normalization stats
+        # EncoderGenerator likely expects dict-like config; use model_dump().
+        enc = EncoderGenerator(self.Y_train, self.cfg.model_dump())
+        Y_train_encoded, decoder, mean_val, std_val = enc.generate_encoder()
 
+        # 5. Build regressor, param_grid, and pipeline
+        regressor = self._build_regressor()
+        param_grid = self._build_param_grid()
+
+        model_pipeline = Pipeline(
+            [
+                ("scaler", StandardScaler()),
+                ("regressor", regressor),
+            ]
+        )
+
+        cv_cfg = self.cfg.cv
+        grid = GridSearchCV(
+            estimator=model_pipeline,
+            param_grid=param_grid,
+            cv=cv_cfg.folds,
+            n_jobs=cv_cfg.n_jobs,
+            scoring=cv_cfg.scoring,
+        )
+
+        grid.fit(self.X_train, Y_train_encoded)
+
+        print("[INFO] Best hyperparameters from GridSearchCV:")
+        print(grid.best_params_)
+
+        best_pipeline = grid.best_estimator_
+
+        # --------- export with joblib instead of returning the tuple ----------
+        os.makedirs(self.output_dir, exist_ok=True)
+        artifact = {
+            "pipeline": best_pipeline,
+            "grid_search": grid,
+            "decoder": decoder,
+            "mean_val": mean_val,
+            "std_val": std_val,
+        }
+
+        artifact_name = f"{self.cfg.model_run_name}_fitted_pipeline.joblib"
+        artifact_path = os.path.join(self.output_dir, artifact_name)
+
+        joblib.dump(artifact, artifact_path)
+        print(f"[INFO] Saved fitted pipeline artifact to {artifact_path}")
+
+        return artifact_path
