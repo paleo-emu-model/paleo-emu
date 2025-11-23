@@ -72,8 +72,6 @@ def make_kernel(name: str, cfg: _RegressorConfig):
         noise_level_bounds=cfg.whitekernel_noise_level_bounds,
     )
 
-
-
 # Encoder configs
 class _PCAEncoderConfig(BaseModel):
     encoder_type: Literal["PCA"]

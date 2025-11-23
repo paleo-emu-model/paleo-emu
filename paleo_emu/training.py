@@ -79,12 +79,11 @@ class TrainingGenerator:
                 "Automatic data loading is not implemented here."
             )
 
-        # 1–4. Encode Y and get decoder / normalization stats
-        # EncoderGenerator likely expects dict-like config; use model_dump().
+        # Encode Y and get decoder / normalization stats
         enc = EncoderGenerator(self.Y_train, self.cfg.model_dump())
         Y_train_encoded, decoder, mean_val, std_val = enc.generate_encoder()
 
-        # 5. Build regressor, param_grid, and pipeline
+        # Build regressor, param_grid, and pipeline
         regressor = self._build_regressor()
         param_grid = self._build_param_grid()
 
@@ -111,7 +110,7 @@ class TrainingGenerator:
 
         best_pipeline = grid.best_estimator_
 
-        # --------- export with joblib instead of returning the tuple ----------
+        # export with joblib
         os.makedirs(self.output_dir, exist_ok=True)
         artifact = {
             "pipeline": best_pipeline,
