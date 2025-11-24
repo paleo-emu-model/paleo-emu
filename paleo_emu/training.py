@@ -70,8 +70,16 @@ class TrainingGenerator:
 
     # ----------------- helpers -----------------
     def _build_kernel_candidates(self):
+        """Build a list of ARD kernels, one per kernel name in the config.
+
+        ARD is enforced by always using a length_scale vector of shape (n_features,).
+        """
         reg_cfg: _RegressorConfig = self.cfg.regressor_config
-        return [make_kernel(name, reg_cfg) for name in reg_cfg.kernels]
+        n_features = self.X_train.shape[1]
+        return [
+            make_kernel(name, reg_cfg, n_features=n_features)
+            for name in reg_cfg.kernels
+        ]
 
     def _build_param_grid(self):
         kernels = self._build_kernel_candidates()

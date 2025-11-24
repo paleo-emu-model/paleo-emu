@@ -6,6 +6,7 @@ import os
 import xarray as xr
 import pandas as pd
 from pathlib import Path
+import numpy as np
 
 try:
     from typing import Literal
@@ -14,21 +15,27 @@ except ImportError:  # pragma: no cover
 
 from typing import List, Optional, Union, Tuple
 
-# Registry of valid kernels 
 from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel
 
+# -------------------------------------------------------------------
+# Registry of valid kernels (names only; actual kernels built in make_kernel)
+# -------------------------------------------------------------------
 _BASE_KERNEL_REGISTRY = {
-    "RBF": RBF(length_scale=1.0),
-    "Matern_nu_15": Matern(length_scale=1.0, nu=1.5),
-    "Matern_nu_25": Matern(length_scale=1.0, nu=2.5),
+    "RBF",
+    "Matern_nu_15",
+    "Matern_nu_25",
 }
 
+# -------------------------------------------------------------------
 # Regressor config
+# -------------------------------------------------------------------
 class _RegressorConfig(BaseModel):
     kernels: List[str]
     n_restarts_optimizer: int = 0
     whitekernel_noise_level: float = 1e-2
     whitekernel_noise_level_bounds: Tuple[float, float] = (1e-5, 1e1)
+
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("kernels")
     @classmethod
@@ -61,16 +68,31 @@ class _RegressorConfig(BaseModel):
             )
         return v
 
-def make_kernel(name: str, cfg: _RegressorConfig):
+
+def make_kernel(name: str, cfg: _RegressorConfig, n_features: int):
     """
-    Construct a kernel from its base name and the WhiteKernel
+    Construct an ARD kernel from its base name and the WhiteKernel
     parameters specified in the regressor_config.
+
+    ARD is enforced by always using a length_scale vector of shape (n_features,).
     """
-    base_kernel = _BASE_KERNEL_REGISTRY[name]
+    # ARD length scale: one per input feature
+    length_scale = np.ones(n_features)
+
+    if name == "RBF":
+        base_kernel = RBF(length_scale=length_scale)
+    elif name == "Matern_nu_15":
+        base_kernel = Matern(length_scale=length_scale, nu=1.5)
+    elif name == "Matern_nu_25":
+        base_kernel = Matern(length_scale=length_scale, nu=2.5)
+    else:
+        raise ValueError(f"Unknown kernel name: {name}")
+
     return base_kernel + WhiteKernel(
         noise_level=cfg.whitekernel_noise_level,
         noise_level_bounds=cfg.whitekernel_noise_level_bounds,
     )
+
 
 # Encoder configs
 class _PCAEncoderConfig(BaseModel):
