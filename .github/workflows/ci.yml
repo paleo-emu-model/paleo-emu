@@ -20,9 +20,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          lfs: true          # ensure LFS files (if any) are fully downloaded
-          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -34,42 +31,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Inspect training data file
-        run: |
-          echo "Listing training_data directory:"
-          ls -lh examples/training_data || echo "Directory not found"
-
-          FILE="examples/training_data/training_data_lowmodice_temp_formatted.nc"
-          if [ -f "$FILE" ]; then
-            echo
-            echo "File size on CI:"
-            ls -lh "$FILE"
-
-            echo
-            echo "File type (using 'file'):"
-            file "$FILE" || true
-
-            echo
-            echo "First few bytes (if it's text/LFS pointer we'll see it):"
-            head -20 "$FILE" || true
-
-            echo
-            echo "Trying to open with netCDF4 directly:"
-            python - << 'EOF'
-import netCDF4
-path = "examples/training_data/training_data_lowmodice_temp_formatted.nc"
-try:
-    ds = netCDF4.Dataset(path, "r")
-    print("Opened with netCDF4 successfully")
-    print("Dimensions:", ds.dimensions.keys())
-    ds.close()
-except Exception as e:
-    print("netCDF4.Dataset failed:", repr(e))
-EOF
-          else:
-            echo "File $FILE does not exist on runner"
-          fi
 
       - name: Run tests
         env:

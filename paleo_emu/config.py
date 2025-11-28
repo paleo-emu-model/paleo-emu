@@ -29,7 +29,7 @@ _BASE_KERNEL_REGISTRY = {
 # -------------------------------------------------------------------
 # Regressor config
 # -------------------------------------------------------------------
-class _RegressorConfig(BaseModel):
+class _GPRegressorConfig(BaseModel):
     kernels: List[str]
     n_restarts_optimizer: int = 0
     whitekernel_noise_level: float = 1e-2
@@ -68,8 +68,33 @@ class _RegressorConfig(BaseModel):
             )
         return v
 
+class _XGBRegressorConfig(BaseModel):
+    num_leaves: list[int]
+    max_depth: list[int]
+    learning_rate: list[float]
+    n_estimators: list[int]
+    colsample_bytree: list[float]
+    min_child_samples: list[int]       
+    subsample: list[float]   
+    @field_validator("subsample")
+    @classmethod
+    def validate_subsample(cls, v: list[float]) -> list[float]:
+        if not isinstance(v, list):
+            raise ValueError("subsample must be a list of floats between 0 and 1 (exclusive for 0, inclusive for 1)")
+        if not all(isinstance(i, float) and 0 < i <= 1 for i in v):
+            raise ValueError("All elements in subsample list must be floats between 0 and 1 (exclusive for 0, inclusive for 1)")
+        return v
+    
+    @field_validator("colsample_bytree")
+    @classmethod
+    def validate_colsample_bytree(cls, v: list[float]) -> list[float]:
+        if not isinstance(v, list):
+            raise ValueError("colsample_bytree must be a list of floats between 0 and 1 (exclusive for 0, inclusive for 1)")
+        if not all(isinstance(i, float) and 0 < i <= 1 for i in v):
+            raise ValueError("All elements in colsample_bytree list must be floats between 0 and 1 (exclusive for 0, inclusive for 1)")
+        return v
 
-def make_kernel(name: str, cfg: _RegressorConfig, n_features: int):
+def make_kernel(name: str, cfg: _GPRegressorConfig, n_features: int):
     """
     Construct an ARD kernel from its base name and the WhiteKernel
     parameters specified in the regressor_config.
@@ -165,7 +190,7 @@ class _CVConfig(BaseModel):
 # Top-level config
 
 class PaleoEmuConfig(BaseModel):
-    regressor_config: _RegressorConfig
+    regressor_config: Union[_GPRegressorConfig, _XGBRegressorConfig]
     cv: _CVConfig
     random_state: int
     model_run_name: str

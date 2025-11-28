@@ -15,3 +15,4 @@ joblib
 netCDF4
 h5netcdf
 pydantic
+xgboost

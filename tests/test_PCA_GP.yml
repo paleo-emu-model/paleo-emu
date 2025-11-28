@@ -1,4 +1,4 @@
-model_run_name: "test"
+model_run_name: "test_PCA_GP"
 random_state: 29
 
 training_file_path: "examples/training_data/"
