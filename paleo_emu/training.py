@@ -36,12 +36,12 @@ class TrainingGenerator:
         Typed configuration object loaded via `load_config(path)`.
     X_train : array-like, shape (n_samples, n_features)
         Input features for training.
-    Y_train : array-like, shape (n_samples, n_outputs)
+    y_train : array-like, shape (n_samples, n_outputs)
         Target fields for training (e.g. flattened spatial fields).
     lat_array : array-like
-        Latitude grid corresponding to Y fields.
+        Latitude grid corresponding to y fields.
     lon_array : array-like
-        Longitude grid corresponding to Y fields.
+        Longitude grid corresponding to y fields.
     output_dir : str, optional
         Directory to save the joblib artifact. Defaults to current directory.
 

@@ -65,6 +65,8 @@ training = TrainingGenerator(
 )
 
 artifact_path = training.run_training()
+
+#load trained model
 artifact = joblib.load(artifact_path)
 model = artifact["model"]
 
@@ -73,7 +75,7 @@ model = artifact["model"]
 # -------------------------------------------------------------------
 Y_pred_full = model.predict(X_full)
 
-sample_idx = 100
+sample_idx = 50
 y_true_1d = Y_full[sample_idx]
 y_pred_1d = Y_pred_full[sample_idx]
 

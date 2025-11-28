@@ -38,6 +38,7 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
     def fit(self, X, y):
         """Fit encoder (PCA or VAE) on y, then fit base_estimator on encoded y."""
         # store y shape for sanity/debug
+        
         y_arr = np.asarray(y)
         if y_arr.ndim == 1:
             y_arr = y_arr.reshape(-1, 1)

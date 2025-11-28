@@ -1,4 +1,0 @@
-
-file_path: "examples/forcing_data/"
-scenarios:
-    rcp85.1: "emul_inputs_RCP85.67.res"
