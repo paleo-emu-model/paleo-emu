@@ -22,8 +22,8 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-
-from paleo_emu.config import PaleoEmuConfig, _RegressorConfig, make_kernel
+from xgboost import XGBRegressor
+from paleo_emu.config import PaleoEmuConfig, _GPRegressorConfig,_XGBRegressorConfig, make_kernel
 from paleo_emu.regressor import EncodedTargetRegressor
 
 
@@ -74,7 +74,7 @@ class TrainingGenerator:
 
         ARD is enforced by always using a length_scale vector of shape (n_features,).
         """
-        reg_cfg: _RegressorConfig = self.cfg.regressor_config
+        reg_cfg: _GPRegressorConfig = self.cfg.regressor_config
         n_features = self.X_train.shape[1]
         return [
             make_kernel(name, reg_cfg, n_features=n_features)
@@ -82,27 +82,57 @@ class TrainingGenerator:
         ]
 
     def _build_param_grid(self):
-        kernels = self._build_kernel_candidates()
-        # NOTE: parameter path:
-        # EncodedTargetRegressor(base_estimator=Pipeline([...]))
-        # -> base_estimator (Pipeline)
-        # -> "regressor" step (MultiOutputRegressor)
-        # -> underlying estimator (GaussianProcessRegressor) -> "kernel"
-        return {"base_estimator__regressor__estimator__kernel": kernels}
+        if type(self.cfg.regressor_config) == _GPRegressorConfig:
+
+            kernels = self._build_kernel_candidates()
+            # NOTE: parameter path:
+            # EncodedTargetRegressor(base_estimator=Pipeline([...]))
+            # -> base_estimator (Pipeline)
+            # -> "regressor" step (MultiOutputRegressor)
+            # -> underlying estimator (GaussianProcessRegressor) -> "kernel"
+            return {"base_estimator__regressor__estimator__kernel": kernels}
+        elif type(self.cfg.regressor_config) == _XGBRegressorConfig:    
+            reg_cfg: _XGBRegressorConfig = self.cfg.regressor_config
+            param_grid = {
+                "base_estimator__regressor__estimator__num_leaves": reg_cfg.num_leaves,
+                "base_estimator__regressor__estimator__max_depth": reg_cfg.max_depth,
+                "base_estimator__regressor__estimator__learning_rate": reg_cfg.learning_rate,
+                "base_estimator__regressor__estimator__n_estimators": reg_cfg.n_estimators,
+                "base_estimator__regressor__estimator__subsample": reg_cfg.subsample,
+                "base_estimator__regressor__estimator__colsample_bytree": reg_cfg.colsample_bytree,
+                "base_estimator__regressor__estimator__min_child_samples": reg_cfg.min_child_samples,
+            }
+            return param_grid
 
     def _build_regressor(self) -> MultiOutputRegressor:
         """Build a (potentially) multi-output Gaussian Process regressor."""
-        reg_cfg: _RegressorConfig = self.cfg.regressor_config
+        if type(self.cfg.regressor_config) == _GPRegressorConfig:
+            print("inferred type is Gaussian Process")
 
-        base_gpr = GaussianProcessRegressor(
-            normalize_y=True,
-            n_restarts_optimizer=reg_cfg.n_restarts_optimizer,
-            random_state=self.cfg.random_state,
-        )
+            reg_cfg: _GPRegressorConfig = self.cfg.regressor_config
+            base_regressor = GaussianProcessRegressor(
+                normalize_y=True,
+                n_restarts_optimizer=reg_cfg.n_restarts_optimizer,
+                random_state=self.cfg.random_state,
+            )
+
+        elif type(self.cfg.regressor_config) == _XGBRegressorConfig:
+            reg_cfg: _XGBRegressorConfig = self.cfg.regressor_config
+            print("inferred type is XGBoost")
+            base_regressor = XGBRegressor(
+                num_leaves=reg_cfg.num_leaves,
+                n_estimators=reg_cfg.n_estimators,
+                max_depth=reg_cfg.max_depth,
+                learning_rate=reg_cfg.learning_rate,
+                subsample=reg_cfg.subsample,
+                colsample_bytree=reg_cfg.colsample_bytree,
+                min_child_samples=reg_cfg.min_child_samples,
+                random_state=self.cfg.random_state,
+            ) 
+
 
         # Wrap in MultiOutputRegressor so we can handle latent_dim > 1 cleanly
-        return MultiOutputRegressor(base_gpr)
-
+        return MultiOutputRegressor(base_regressor)
     # ----------------- main training -----------------
     def run_training(self) -> str:
         """Run training and export results as a joblib file.
