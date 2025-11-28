@@ -71,6 +71,11 @@ and referenced from text using \autoref{fig:example}.
 Figure sizes can be customized by adding an optional second parameter:
 ![Caption for example figure.](figure.png){ width=20% }
 
+# Similar work: 
+
+Work by Tran et al., 2016 [@tran:2016]
+
+
 # Acknowledgements
 
 We acknowledge contributions from 
