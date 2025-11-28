@@ -1,179 +1,127 @@
-"""
-This module is used to build regressors for pipeline.
-To be confirmed: does the encoder affect the choice of regressor?
-"""
-
-from pyparsing import Path
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import (
-    RBF, Matern, RationalQuadratic,
-    ConstantKernel as C, WhiteKernel
-)
-from lightgbm import LGBMRegressor
-from sklearn.model_selection import RandomizedSearchCV
-import yaml
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.decomposition import PCA
 
-def build_regressor(cfg_path, regressor_type="GPR", fixed_regressor_hp=True, verbose=True):
-        # accept either a dict (already parsed) or a path to a yaml file
-    if isinstance(cfg_path, dict):
-        cfg = cfg_path
-    else:
-        cfg_file = Path(cfg_path)
-        if not cfg_file.exists():
-            raise FileNotFoundError(f"Config file not found: {cfg_path}")
-        with open(cfg_file, "r") as fh:
-            cfg = yaml.safe_load(fh)
-            
-    if regressor_type == "GPR":
-        if fixed_regressor_hp:
-            # set fixed hyperparameters
-            # Load hyperparameters from emulator.yaml
-            print("[INFO] Using fixed hyperparameters range for GPR from YAML configuration.")
-            print("[INFO] Different PCs should need different hyperparameters, check if we need to fix it or not.")
-            kernel_name = cfg['GPR_config']['kernel']
-            nugget_value = cfg['GPR_config']['nugget_value']
-            length_scales = cfg['GPR_config']['length_scales']
-            noise_level = cfg['GPR_config'].get('noise_level', 1.0)
-            n_restarts_optimizer = cfg['GPR_config'].get('n_restarts_optimizer', 5)
-            alpha = cfg['GPR_config'].get('alpha', 1e-6)
-            nu = cfg['GPR_config'].get('nu', 1.5)
-            constant_value = cfg['GPR_config'].get('constant_value', 1.0)
-            constant_value_bounds = (constant_value * 0.1, constant_value * 10.0) # allow small range of constant value tuning
-            # coerce types
-            try:
-                nugget_value = float(nugget_value)
-            except Exception:
-                raise ValueError(f"Invalid nugget_value in config: {nugget_value!r}")
+from paleo_emu.encoders import EncoderGenerator, _VAE  # adjust import if needed
+from paleo_emu.config import PaleoEmuConfig
 
-            # ensure length_scales is numeric (scalar or list)
-            if isinstance(length_scales, (list, tuple)):
-                length_scales = [float(x) for x in length_scales]
-            else:
-                length_scales = float(length_scales)
 
-            if kernel_name == "RBF":
-                kernel = C(constant_value, constant_value_bounds) * RBF(length_scale=length_scales)
-            elif kernel_name == "RBF_White":
-                kernel = C(constant_value, constant_value_bounds) * RBF(length_scale=length_scales) + WhiteKernel(noise_level=noise_level)
-            elif kernel_name == "Matern":
-                kernel = C(constant_value, constant_value_bounds) * Matern(length_scale=length_scales, nu=nu)
-            elif kernel_name == "Matern_White":
-                kernel = C(constant_value, constant_value_bounds) * Matern(length_scale=length_scales, nu=nu) + WhiteKernel(noise_level=noise_level)
-            else:
-                raise ValueError(f"[ERROR] Unsupported kernel name: {kernel_name}. Create kernel manually.")
-            
-            regressor = GaussianProcessRegressor(
-                kernel=kernel,
-                alpha=nugget_value,  # using alpha parameter to set nugget
-                optimizer="fmin_l_bfgs_b",      # still use optimizer to fine-tune hyperparameters
-                n_restarts_optimizer=n_restarts_optimizer, 
-                normalize_y=True,
-                copy_X_train=True
-            )
-        elif fixed_regressor_hp == "old_R_emulator":
-            print("[INFO] Using fixed hyperparameters for GPR from the old R emulator.")
-            nkeep=20.0
-            hp_values = []
-            # Load hyperparameters from emulator.yaml
-            nkeep = cfg['GPR_config']['old_R_emulator_nkeep']['nkeep']
-            hp_values = cfg['GPR_config']['old_R_emulator_hyperparameters']
-            hp_values = [value * nkeep for value in hp_values]
-            length_scales = hp_values[:-1]  # Extract all but the last value for length scales
-            nugget_value = hp_values[-1]   # The last value is the nugget
-            kernel = RBF(length_scale=length_scales)
-            regressor = GaussianProcessRegressor(
-                kernel=kernel,
-                alpha=nugget_value,  # 使用 alpha 参数设置 nugget
-                optimizer=None,      # 关闭优化器
-                normalize_y=False,
-                copy_X_train=True
-            )
+class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
+    """
+    Meta-estimator that:
+      - encodes y using EncoderGenerator (PCA or VAE, depending on config)
+      - fits any sklearn regressor on the encoded targets
+      - decodes predictions back to the original y space.
+
+    Parameters
+    ----------
+    base_estimator : sklearn-like regressor
+        Any estimator with fit(X, y) and predict(X).
+        Can be a bare estimator (e.g. GaussianProcessRegressor)
+        or a Pipeline (e.g. Pipeline([("scaler", ...), ("regressor", ...)])).
+
+    model_config : PaleoEmuConfig
+        The same config you pass to EncoderGenerator / TrainingGenerator.
+
+    return_encoded : bool, default=False
+        If True, predict() returns encoded y instead of decoded y.
+        (Useful if you sometimes want latent-space predictions.)
+    """
+
+    def __init__(self, base_estimator, model_config: PaleoEmuConfig,
+                 return_encoded: bool = False):
+        self.base_estimator = base_estimator
+        self.model_config = model_config
+        self.return_encoded = return_encoded
+
+    # ----------------- core sklearn API -----------------
+    def fit(self, X, y):
+        """Fit encoder (PCA or VAE) on y, then fit base_estimator on encoded y."""
+        # store y shape for sanity/debug
+        
+        y_arr = np.asarray(y)
+        if y_arr.ndim == 1:
+            y_arr = y_arr.reshape(-1, 1)
+        self.n_outputs_ = y_arr.shape[1]
+
+        # build encoder and encode y
+        enc_gen = EncoderGenerator(y_arr, self.model_config)
+        Y_encoded, encoder_model, mean_val, std_val = enc_gen.generate_encoder()
+
+        # keep encoder bits for later decoding
+        self.encoder_model_ = encoder_model   # PCA instance or _VAE instance
+        self.mean_val_ = mean_val
+        self.std_val_ = std_val
+
+        # ensure 2D target for fitting
+        Y_encoded = np.asarray(Y_encoded)
+        if Y_encoded.ndim == 1:
+            Y_encoded = Y_encoded.reshape(-1, 1)
+
+        # clone and fit base estimator
+        self.estimator_ = clone(self.base_estimator)
+        self.estimator_.fit(X, Y_encoded)
+        return self
+
+    def predict(self, X):
+        """
+        Predict in encoded space with base_estimator, then decode to original y.
+
+        If self.return_encoded == True, returns encoded predictions instead.
+        """
+        check_is_fitted = getattr(
+            self, "estimator_", None
+        ) is not None and getattr(self, "encoder_model_", None) is not None
+        if not check_is_fitted:
+            raise RuntimeError("EncodedTargetRegressor is not fitted yet.")
+
+        y_enc_pred = self.estimator_.predict(X)
+        y_enc_pred = np.asarray(y_enc_pred)
+        if y_enc_pred.ndim == 1:
+            y_enc_pred = y_enc_pred.reshape(-1, 1)
+
+        if self.return_encoded:
+            return y_enc_pred
+
+        return self._decode(y_enc_pred)
+
+    def predict_encoded(self, X):
+        """Return predictions in latent (encoded) space."""
+        check_is_fitted = getattr(
+            self, "estimator_", None
+        ) is not None and getattr(self, "encoder_model_", None) is not None
+        if not check_is_fitted:
+            raise RuntimeError("EncodedTargetRegressor is not fitted yet.")
+
+        y_enc_pred = self.estimator_.predict(X)
+        return np.asarray(y_enc_pred)
+    
+    # ----------------- helpers -----------------
+    def _decode(self, y_enc):
+        """
+        Decode encoded predictions back to original Y space,
+        handling both PCA and VAE encoders plus normalization.
+        """
+        # 1) inverse through encoder model
+        if isinstance(self.encoder_model_, PCA):
+            # PCA inverse_transform operates in the normalized space
+            Y_norm = self.encoder_model_.inverse_transform(y_enc)
+
+        elif isinstance(self.encoder_model_, _VAE):
+            # VAE decoder takes latent z and returns normalized reconstruction
+            # y_enc should be float32 tensor for TF
+            z = y_enc.astype("float32")
+            Y_norm = self.encoder_model_.decoder(z).numpy()
+
         else:
-            print("[INFO] Using GPR optimization with chosen range for hyperparameters.")
-            # use WhiteKernel rather than alpha nugget for numerical stability
-            # XY has been normalized, so ConstantKernel is not necessary here
-            n_restarts_optimizer = 12
-            kernel = RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e3)) + WhiteKernel(noise_level=1.0, noise_level_bounds=(1e-6, 1e1))
-            regressor = GaussianProcessRegressor(
-                kernel=kernel,
-                n_restarts_optimizer=n_restarts_optimizer,  # n_restarts_optimizer can be set higher for better optimization
-                random_state=42,
-                normalize_y=True
+            raise TypeError(
+                f"Unsupported encoder model type: {type(self.encoder_model_)}"
             )
-            if verbose:
-                print(f"[GPR] init kernel={regressor.kernel} | restarts={n_restarts_optimizer}")
 
-    elif regressor_type == "LGBM":
-        import warnings
-        warnings.filterwarnings("ignore", message=".*valid feature names.*", category=UserWarning)
-        if fixed_regressor_hp:
-            print("[INFO] Using fixed hyperparameters for LGBMRegressor.")
-            # Load hyperparameters from emulator.yaml
-            lgbm_params = cfg['LGBM_config'][encoder]
-            print(f"[INFO] Loaded LGBM hyperparameters: {lgbm_params}")
-            regressor = LGBMRegressor(
-                n_estimators=lgbm_params['n_estimators'],
-                learning_rate=lgbm_params['learning_rate'],
-                num_leaves=lgbm_params['num_leaves'],
-                max_depth=lgbm_params['max_depth'],
-                min_child_samples=lgbm_params['min_child_samples'],
-                subsample=lgbm_params['subsample'],
-                colsample_bytree=lgbm_params['colsample_bytree'],
-                random_state=lgbm_params['random_state'],
-                n_jobs=lgbm_params['n_jobs'],
-                verbosity=-1
-            )
-        else:
-            print("[INFO] Using LGBM optimization.")
-            print("[INFO] Note: it will take long time if dataset is large.")
-            # load search settings from config if present
-            lgbm_cfg = cfg.get('LGBM_config', {}).get(encoder, {}) if cfg else {}
-            # stronger-regularization defaults: smaller trees, more min samples per leaf,
-            # L1/L2 penalties, feature/row subsampling and modest learning rate.
-            param_distributions = lgbm_cfg.get('param_distributions', {
-                # model capacity (small because few samples)
-                'num_leaves': [8, 12, 16, 24, 32],
-                'max_depth': [3, 4, 6],
-                # learning / ensemble size (conservative)
-                'learning_rate': [0.001, 0.005, 0.01, 0.03],
-                'n_estimators': [100, 200, 400, 800],
-                # row/feature subsampling to reduce overfit
-                'subsample': [0.6, 0.7, 0.8, 1.0],
-                'colsample_bytree': [0.5, 0.6, 0.7, 0.8],
-                'feature_fraction': [0.5, 0.6, 0.7, 0.8],
-                'bagging_fraction': [0.6, 0.8, 1.0],
-                'bagging_freq': [0, 1, 5],
-                # leaf / split constraints (increase min samples per leaf)
-                'min_child_samples': [10, 20, 30, 50],
-                # regularization penalties (favor some L2)
-                'lambda_l1': [0.0, 0.01, 0.1, 1.0],
-                'lambda_l2': [0.0, 0.5, 1.0, 5.0],
-                # require minimum gain to split (avoid tiny noisy splits)
-                'min_gain_to_split': [0.0, 0.01, 0.05, 0.1],
-            })
-            # search budget & CV
-            n_iter = int(lgbm_cfg.get('n_iter', 20))    # increase if you can afford time (30-100)
-            cv = int(lgbm_cfg.get('cv', 4))             # with 120 samples 4 or 5 folds is reasonable
-            random_state = int(lgbm_cfg.get('random_state', 42))
+        # 2) undo normalization from EncoderGenerator
+        # EncoderGenerator used: Y_norm = (Y - mean)/std + 1e-99
+        # So: Y = (Y_norm - 1e-99) * std + mean
+        eps = 1e-99
+        Y = (Y_norm - eps) * self.std_val_ + self.mean_val_
 
-            base_lgb = LGBMRegressor(random_state=random_state, verbosity=-1)
-            # Use RandomizedSearchCV so that when cloned for each output it will tune per‑PC on that PC's training data.
-            # IMPORTANT: set n_jobs=1 here to avoid nested parallelism when outer code also parallelizes.
-            search = RandomizedSearchCV(
-                estimator=base_lgb,
-                param_distributions=param_distributions,
-                n_iter=n_iter,
-                cv=cv,
-                scoring='neg_mean_squared_error',
-                random_state=random_state,
-                n_jobs=1,
-                verbose=0
-            )
-            regressor = search
-    else:
-        raise ValueError("[ERROR] regressor_type must be either 'GPR' or 'LGBM'.")
-
-    return regressor
-
+        return Y

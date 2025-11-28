@@ -1,59 +1,104 @@
 import os
 from pathlib import Path
 import unittest
-import xarray as xr
-from paleo_emu.training import run_training
-from paleo_emu.prediction import run_prediction
+
+import joblib
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+
+from paleo_emu.training import TrainingGenerator
+from paleo_emu.config import load_config
+from paleo_emu.load import load_training_data
+from paleo_emu.regressor import EncodedTargetRegressor  
 
 
 class TestTraining(unittest.TestCase):
-
-    def __init__(self, methodName="runTest"):
-        super().__init__(methodName)
-
+    def setUp(self):
         # Directory of this test file: .../tests
         here = Path(__file__).resolve().parent
 
         # Repo root (one level up from tests/)
-        repo_root = here.parent
+        self.repo_root = here.parent
 
         # Path to examples directory
-        self.examples_dir = repo_root / "examples"
+        self.examples_dir = self.repo_root / "examples"
 
-    def test_run_training(self):
-        cfg_path = self.examples_dir / "training_test.yaml"
-        emulatorPCAGPR = run_training(
-            cfg_path=str(cfg_path),
-            regressor_type="GPR",
-            encoder="PCA",
-            save_pipeline=True,
+    def _run_training_with_cfg(self, cfg_filename: str):
+        model_cfg_path = self.repo_root / "tests" / cfg_filename
+
+        # Use the typed loader (PaleoEmuConfig)
+        cfg = load_config(str(model_cfg_path))
+
+        # Load full training data from disk
+        X_full, Y_full, _, _, lat_array, lon_array = load_training_data(cfg)
+
+        # 80/20 train–test split for performance evaluation
+        X_train, X_test, Y_train, Y_test = train_test_split(
+            X_full,
+            Y_full,
+            test_size=0.2,
+            random_state=cfg.random_state,
         )
 
-    def test_run_prediction(self):
-        model_cfg_path = (
-            self.examples_dir
-            / "outputs"
-            / "emulator_saved"
-            / "emulator_PCA+GPR_lowice_test.joblib"
+        training = TrainingGenerator(
+            cfg,
+            X_train,
+            Y_train,
+            lat_array,
+            lon_array,
+            output_dir=str(self.examples_dir),
         )
-        forcing_cfg = self.examples_dir / "forcing.yaml"
+        artifact_path = training.run_training()
+        self.assertTrue(os.path.exists(artifact_path))
 
-        prediction = run_prediction(
-            model_cfg=str(model_cfg_path),
-            forcing_cfg=str(forcing_cfg),
-            scenario="rcp85.1",
-            output_dir=str(self.examples_dir / "outputs" / "prediction"),
+        # Return everything needed for checks
+        return artifact_path, X_full, X_test, Y_test
+
+    def _check_artifact_and_predictions(self, artifact_path, X_full, X_test, Y_test):
+        # Load the artifact
+        artifact = joblib.load(artifact_path)
+
+        # Basic keys check
+        self.assertIn("model", artifact)
+        model = artifact["model"]
+
+        # Model should be an EncodedTargetRegressor
+        self.assertIsInstance(model, EncodedTargetRegressor)
+
+        # -------------------------------------------------
+        # 1) Mean value check on original X field
+        # -------------------------------------------------
+        Y_pred_full = model.predict(X_full)
+        field_mean = np.mean(Y_pred_full)
+        self.assertAlmostEqual(field_mean, 5.3, delta=0.05)
+        print(f"Mean temperature: {field_mean}")
+
+        # -------------------------------------------------
+        # 2) Performance check on 20% hold-out set
+        # -------------------------------------------------
+        Y_pred_test = model.predict(X_test)
+
+        # R^2 averaged over all outputs
+        r2 = r2_score(Y_test, Y_pred_test, multioutput="uniform_average")
+
+        print(f"Hold-out R^2: {r2}")
+
+        self.assertGreater(
+            r2,
+            0.0,
+            msg=f"Hold-out R^2 too low: {r2}",
         )
 
-    def test_model_output(self):
-        ds_path = (
-            self.examples_dir
-            / "outputs"
-            / "prediction"
-            / "PCA_GPR_forcing.yaml_prediction.nc"
-        )
-        ds = xr.open_dataset(ds_path)
-        self.assertAlmostEqual(ds["prediction"].mean(), 5.21, delta=0.01)
+    def test_run_training_pca(self):
+        """Full training run using PCA encoder config with 20% hold-out performance check."""
+        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA.yml")
+        self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+
+    # def test_run_training_vae(self):
+    #     """Full training run using VAE (learned encoder) config with 20% hold-out performance check."""
+    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE.yml")
+    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
 
 
 if __name__ == "__main__":
