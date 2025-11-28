@@ -24,7 +24,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from paleo_emu.config import PaleoEmuConfig, _RegressorConfig, make_kernel
-from paleo_emu.encoding import EncodedTargetRegressor
+from paleo_emu.regressor import EncodedTargetRegressor
 
 
 class TrainingGenerator:

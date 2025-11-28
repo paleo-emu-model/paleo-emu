@@ -10,7 +10,7 @@ from sklearn.metrics import r2_score
 from paleo_emu.training import TrainingGenerator
 from paleo_emu.config import load_config
 from paleo_emu.load import load_training_data
-from paleo_emu.encoding import EncodedTargetRegressor  
+from paleo_emu.regressor import EncodedTargetRegressor  
 
 
 class TestTraining(unittest.TestCase):
