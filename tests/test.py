@@ -90,15 +90,15 @@ class TestTraining(unittest.TestCase):
             msg=f"Hold-out R^2 too low: {r2}",
         )
 
-    # def test_run_training_pca(self):
-    #     """Full training run using PCA encoder config with 20% hold-out performance check."""
-    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA.yml")
-    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
-
-    def test_run_training_vae(self):
-        """Full training run using VAE (learned encoder) config with 20% hold-out performance check."""
-        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE.yml")
+    def test_run_training_pca(self):
+        """Full training run using PCA encoder config with 20% hold-out performance check."""
+        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA.yml")
         self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+
+    # def test_run_training_vae(self):
+    #     """Full training run using VAE (learned encoder) config with 20% hold-out performance check."""
+    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE.yml")
+    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
 
 
 if __name__ == "__main__":
