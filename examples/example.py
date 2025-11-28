@@ -28,8 +28,6 @@ import cartopy.feature as cfeature
 from paleo_emu.training import TrainingGenerator
 from paleo_emu.config import load_config
 from paleo_emu.load import load_training_data
-from paleo_emu.encoding import EncodedTargetRegressor
-
 
 # -------------------------------------------------------------------
 # 1. Load configuration and training data
