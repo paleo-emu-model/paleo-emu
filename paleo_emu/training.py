@@ -112,6 +112,7 @@ class TrainingGenerator:
             reg_cfg: _GPRegressorConfig = self.cfg.regressor_config
             base_regressor = GaussianProcessRegressor(
                 normalize_y=True,
+                alpha=reg_cfg.alpha,
                 n_restarts_optimizer=reg_cfg.n_restarts_optimizer,
                 random_state=self.cfg.random_state,
             )
@@ -186,12 +187,13 @@ class TrainingGenerator:
         # export with joblib
         os.makedirs(self.output_dir, exist_ok=True)
         artifact = {
-            "model": best_model,
+            "model": best_model,                 # EncodedTargetRegressor (bare regressor)（contains scaler/encoder/regressor）
             "grid_search": grid,
             "lat_array": self.lat_array,
             "lon_array": self.lon_array,
+            "mean_val": getattr(self, "mean_val", None),
+            "std_val": getattr(self, "std_val", None)
         }
-
         artifact_name = f"{self.cfg.model_run_name}_fitted_pipeline.joblib"
         artifact_path = os.path.join(self.output_dir, artifact_name)
 

@@ -32,6 +32,7 @@ _BASE_KERNEL_REGISTRY = {
 class _GPRegressorConfig(BaseModel):
     kernels: List[str]
     n_restarts_optimizer: int = 0
+    alpha: float = 1e-6
     whitekernel_noise_level: float = 1e-2
     whitekernel_noise_level_bounds: Tuple[float, float] = (1e-5, 1e1)
 
@@ -45,6 +46,13 @@ class _GPRegressorConfig(BaseModel):
         unknown = [k for k in v if k not in _BASE_KERNEL_REGISTRY]
         if unknown:
             raise ValueError(f"Unknown kernel names: {unknown}")
+        return v
+
+    @field_validator("alpha")
+    @classmethod
+    def validate_alpha(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("alpha must be > 0, default is 1e-6")
         return v
 
     @field_validator("whitekernel_noise_level")
@@ -103,7 +111,7 @@ def make_kernel(name: str, cfg: _GPRegressorConfig, n_features: int):
     """
     # ARD length scale: one per input feature
     length_scale = np.ones(n_features)
-
+    
     if name == "RBF":
         base_kernel = RBF(length_scale=length_scale)
     elif name == "Matern_nu_15":
