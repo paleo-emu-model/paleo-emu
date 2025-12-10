@@ -92,25 +92,8 @@ class TestTraining(unittest.TestCase):
             msg=f"Hold-out R^2 too low: {r2}",
         )
 
-    def test_run_training_pca_gp(self):
-        """Full training run using PCA encoder config with 10% hold-out performance check."""
-        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_GP.yml")
-        self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
-
-    # def test_run_training_pca_xgb(self):
-    #     """Full training run using PCA encoder config with 10% hold-out performance check."""
-    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_XGB.yml")
-    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
-
-
-    # def test_run_training_vae(self):
-    #     """Full training run using VAE (learned encoder) config with 10% hold-out performance check."""
-    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE.yml")
-    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
-
-
     def _run_prediction_with_cfg(self, cfg_filename: str, scenario:str):
-        model_cfg_path = self.repo_root / "examples" / cfg_filename
+        model_cfg_path = self.repo_root / "tests" / cfg_filename
 
         # Use the typed loader (PaleoEmuConfig)
         cfg = load_config(str(model_cfg_path))
@@ -128,6 +111,25 @@ class TestTraining(unittest.TestCase):
         Y_pred = model.predict(X_pred)
 
         return Y_pred
+    
+
+    def test_run_training_pca_gp(self):
+        """Full training run using PCA encoder config with 10% hold-out performance check."""
+        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_GP.yml")
+        Y_pred = self._run_prediction_with_cfg("test_PCA_GP.yml", scenario="800ka")
+        self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+
+    # def test_run_training_pca_xgb(self):
+    #     """Full training run using PCA encoder config with 10% hold-out performance check."""
+    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_XGB.yml")
+    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+
+
+    # def test_run_training_vae(self):
+    #     """Full training run using VAE (learned encoder) config with 10% hold-out performance check."""
+    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE.yml")
+    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
