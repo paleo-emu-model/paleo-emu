@@ -201,6 +201,8 @@ class PaleoEmuConfig(BaseModel):
     X_input_file_name: str
     Y_input_file_name: str
     X_column_names: List[str]
+    forcing_data_path: Path
+    forcing_data: dict[str, dict[str, str]]
 
     @field_validator("X_column_names")
     @classmethod

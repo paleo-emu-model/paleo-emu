@@ -24,3 +24,8 @@ regressor_config:
   n_restarts_optimizer: 3
   whitekernel_noise_level: 1e-2
   whitekernel_noise_level_bounds: [1e-5, 1e1]
+
+forcing_data_path: "examples/forcing_data/"
+forcing_data:
+  800ka:
+    forcing_input: "Paleo_forcings_800ka_xin.res"

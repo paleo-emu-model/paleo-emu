@@ -25,3 +25,8 @@ regressor_config:
   colsample_bytree: [0.8]
   min_child_samples: [5]
 
+
+forcing_data_path: "examples/forcing_data/"
+forcing_data:
+  800ka:
+    forcing_input: "Paleo_forcings_800ka_xin.res"
