@@ -113,11 +113,12 @@ def make_kernel(name: str, cfg: _GPRegressorConfig, n_features: int):
     length_scale = np.ones(n_features)
     
     if name == "RBF":
-        base_kernel = RBF(length_scale=length_scale)
+        base_kernel = RBF(length_scale=length_scale, length_scale_bounds=(1e-5, 1e5))
     elif name == "Matern_nu_15":
-        base_kernel = Matern(length_scale=length_scale, nu=1.5)
+        base_kernel = Matern(length_scale=length_scale, nu=1.5,     
+                             length_scale_bounds=(1e-5, 1e5))
     elif name == "Matern_nu_25":
-        base_kernel = Matern(length_scale=length_scale, nu=2.5)
+        base_kernel = Matern(length_scale=length_scale, nu=2.5, length_scale_bounds=(1e-5, 1e5))
     else:
         raise ValueError(f"Unknown kernel name: {name}")
 

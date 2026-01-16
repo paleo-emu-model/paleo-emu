@@ -88,7 +88,7 @@ class TestTraining(unittest.TestCase):
 
         self.assertGreater(
             r2,
-            0.0,
+            0.99,
             msg=f"Hold-out R^2 too low: {r2}",
         )
 

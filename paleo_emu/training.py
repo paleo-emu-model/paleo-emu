@@ -168,6 +168,9 @@ class TrainingGenerator:
         param_grid = self._build_param_grid()
         cv_cfg = self.cfg.cv
 
+        # for checking
+        print("[DEBUG] param_grid:", param_grid)
+
         grid = GridSearchCV(
             estimator=model,
             param_grid=param_grid,
@@ -178,9 +181,9 @@ class TrainingGenerator:
 
         # Fit on RAW Y (high-dimensional field); encoding happens inside model
         grid.fit(self.X_train, self.Y_train)
-
-        print("[INFO] Best hyperparameters from GridSearchCV:")
-        print(grid.best_params_)
+        print("-----------------------------------")
+        print(grid.get_params(deep=True))
+        print("------------------------------------")
 
         best_model = grid.best_estimator_
 

@@ -15,3 +15,4 @@ examples/outputs/LGM/*.nc
 examples/outputs/leave_one_out/*.nc
 # examples/training_data/*.nc
 to_be_moved/
+NWS_emulation/
