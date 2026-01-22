@@ -15,6 +15,7 @@ The joblib artifact will contain:
 """
 
 import os
+import warnings
 
 import joblib
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -23,6 +24,7 @@ from sklearn.multioutput import MultiOutputRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
+from sklearn.exceptions import ConvergenceWarning
 from paleo_emu.config import PaleoEmuConfig, _GPRegressorConfig,_XGBRegressorConfig, make_kernel
 from paleo_emu.regressor import EncodedTargetRegressor
 
@@ -112,6 +114,7 @@ class TrainingGenerator:
             reg_cfg: _GPRegressorConfig = self.cfg.regressor_config
             base_regressor = GaussianProcessRegressor(
                 normalize_y=True,
+                alpha=reg_cfg.alpha,
                 n_restarts_optimizer=reg_cfg.n_restarts_optimizer,
                 random_state=self.cfg.random_state,
             )
@@ -176,22 +179,30 @@ class TrainingGenerator:
         )
 
         # Fit on RAW Y (high-dimensional field); encoding happens inside model
-        grid.fit(self.X_train, self.Y_train)
-
-        print("[INFO] Best hyperparameters from GridSearchCV:")
-        print(grid.best_params_)
+        # Suppress ConvergenceWarnings during parallel GP optimization
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ConvergenceWarning)
+            grid.fit(self.X_train, self.Y_train)
+        
+        print("-----------------------------------")
+        print("Best parameters:")
+        for param, value in grid.best_params_.items():
+            print(f"  {param}: {value}")
+        print(f"Best CV score: {grid.best_score_:.4f}")
+        print("------------------------------------")
 
         best_model = grid.best_estimator_
 
         # export with joblib
         os.makedirs(self.output_dir, exist_ok=True)
         artifact = {
-            "model": best_model,
+            "model": best_model,                 # EncodedTargetRegressor (bare regressor)（contains scaler/encoder/regressor）
             "grid_search": grid,
             "lat_array": self.lat_array,
             "lon_array": self.lon_array,
+            "mean_val": getattr(self, "mean_val", None),
+            "std_val": getattr(self, "std_val", None)
         }
-
         artifact_name = f"{self.cfg.model_run_name}_fitted_pipeline.joblib"
         artifact_path = os.path.join(self.output_dir, artifact_name)
 

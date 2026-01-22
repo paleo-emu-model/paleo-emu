@@ -153,13 +153,14 @@ class EncoderGenerator:
         self.mean_val = np.mean(self.Y_flat)
         self.std_val = np.std(self.Y_flat)
         self.Y_norm = (np.asarray(Y) - self.mean_val) / self.std_val + 1e-99  # avoid exact zeros
+        # self.Y_norm = (np.asarray(Y) - self.mean_val) / self.std_val
 
-        print(
-            f"[INFO] Raw Y_flat min={np.min(self.Y_flat)}, "
-            f"max={np.max(self.Y_flat)}, mean={np.mean(self.Y_flat)}, "
-            f"std={np.std(self.Y_flat)}"
-        )
-        print("[INFO] Y_flat standardized to mean ~0, std ~1")
+        # print(
+        #     f"[INFO] Raw Y_flat min={np.min(self.Y_flat)}, "
+        #     f"max={np.max(self.Y_flat)}, mean={np.mean(self.Y_flat)}, "
+        #     f"std={np.std(self.Y_flat)}"
+        # )
+        # print("[INFO] Y_flat standardized to mean ~0, std ~1")
 
     # ------------------------------------------------------------------
     # PCA encoder
@@ -172,20 +173,20 @@ class EncoderGenerator:
             )
 
         # Pydantic guarantees at least one of these is set
-        if self.encoder_cfg.n_components is not None:
-            n_components = self.encoder_cfg.n_components
-        else:
+        if self.encoder_cfg.pca_variance_ratio is not None:
             # use variance ratio as n_components parameter for PCA
             n_components = self.encoder_cfg.pca_variance_ratio
+        else:
+            n_components = self.encoder_cfg.n_components
 
         model = PCA(n_components=n_components)
         Y_encoded = model.fit_transform(self.Y_norm)
 
-        print(f"[INFO] PCA n_components_: {model.n_components_}")
-        print(
-            f"[INFO] Sum explained variance: "
-            f"{np.sum(model.explained_variance_ratio_)}"
-        )
+        # print(f"[INFO] PCA n_components_: {model.n_components_}")
+        # print(
+        #     f"[INFO] Sum explained variance: "
+        #     f"{np.sum(model.explained_variance_ratio_)}"
+        # )
 
         return Y_encoded, model, self.mean_val, self.std_val
 
