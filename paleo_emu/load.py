@@ -109,7 +109,7 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
 
     X_headers = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice'] 
     
-    print(f'X inputs should be in order: {X_headers}')
+    print(f'[INFO] PREDICTION: X inputs should be in order: {X_headers}')
     # confirm = input(f"Please confirm X columns are in order: {X_headers} (y/n): ").strip().lower()
     # if confirm != 'y':
     #     raise ValueError("Please 1. reorder your X input or 2. edit Line 112 in paleo_emu/load.py to match your X order.")
