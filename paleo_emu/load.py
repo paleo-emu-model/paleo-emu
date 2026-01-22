@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 import xarray as xr
 import pandas as pd
+import numpy as np
 
 from paleo_emu.config import PaleoEmuConfig 
 
@@ -56,9 +57,18 @@ def load_training_data(model_configuration: PaleoEmuConfig):
 
     X = df[column_names].values  # (n_samples, n_features)
 
+    ind_co2 = column_names.index('co2')
+    X[:, ind_co2] = np.log(X[:, ind_co2])
+
     # ---- Load Y (NetCDF) ----
     ds = xr.open_dataset(Y_path, engine="h5netcdf")
-    var_name = list(ds.data_vars)[0]
+
+    # Check if there are data variables; if not, look for the first non-coordinate variable
+    if len(ds.data_vars) > 0:
+        var_name = list(ds.data_vars)[0]
+    else:
+        # Fallback: get the first coordinate variable that has multiple dimensions
+        var_name = [v for v in ds.coords if len(ds[v].dims) > 1][0]
 
     dims = ds[var_name].dims
     if len(dims) < 3:
@@ -91,10 +101,23 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
     if not forcing_path.exists():
         raise FileNotFoundError(f"forcing file not found: {forcing_path}")
 
-    df = pd.read_csv(forcing_path, sep=r"\s+", skiprows=1, header=None)
+    df = pd.read_csv(forcing_path, sep=r"\s+", skiprows=0, header=None)
+    
     if df.shape[1] < 5:
         raise ValueError(f"Unexpected forcing file shape {df.shape} for {forcing_path}")
     
-    df.columns = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice'] + [f"c{i}" for i in range(df.shape[1]-5)]
-    X_pred = df[['co2', 'esinw', 'ecosw', 'obliquity', 'ice']]
+
+    X_headers = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice'] 
+    
+    print(f'X inputs should be in order: {X_headers}')
+    # confirm = input(f"Please confirm X columns are in order: {X_headers} (y/n): ").strip().lower()
+    # if confirm != 'y':
+    #     raise ValueError("Please 1. reorder your X input or 2. edit Line 112 in paleo_emu/load.py to match your X order.")
+   
+    df.columns = X_headers + [f"c{i}" for i in range(df.shape[1]-5)]
+    X_pred = df[X_headers]
+    
+    ind_co2 = X_headers.index('co2')
+    X_pred.iloc[:, ind_co2] = X_pred.iloc[:, ind_co2].apply(lambda x: np.log(x))
+
     return X_pred
