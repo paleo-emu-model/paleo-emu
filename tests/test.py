@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import unittest
+import warnings
 
 import joblib
 import numpy as np
@@ -13,7 +14,6 @@ from paleo_emu.load import load_training_data
 from paleo_emu.load import load_forcing_data
 from paleo_emu.regressor import EncodedTargetRegressor  
 import xarray as xr
-
 
 class TestTraining(unittest.TestCase):
     def setUp(self):
@@ -108,7 +108,7 @@ class TestTraining(unittest.TestCase):
 
         # Make predictions
         X_pred = load_forcing_data(cfg, scenario=scenario)
-        Y_pred = model.predict(X_pred)
+        Y_pred = model.predict(X_pred.to_numpy())
 
         return Y_pred
     
