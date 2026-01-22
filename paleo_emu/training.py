@@ -15,6 +15,7 @@ The joblib artifact will contain:
 """
 
 import os
+import warnings
 
 import joblib
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -23,6 +24,7 @@ from sklearn.multioutput import MultiOutputRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
+from sklearn.exceptions import ConvergenceWarning
 from paleo_emu.config import PaleoEmuConfig, _GPRegressorConfig,_XGBRegressorConfig, make_kernel
 from paleo_emu.regressor import EncodedTargetRegressor
 
@@ -177,7 +179,11 @@ class TrainingGenerator:
         )
 
         # Fit on RAW Y (high-dimensional field); encoding happens inside model
-        grid.fit(self.X_train, self.Y_train)
+        # Suppress ConvergenceWarnings during parallel GP optimization
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ConvergenceWarning)
+            grid.fit(self.X_train, self.Y_train)
+        
         print("-----------------------------------")
         print("Best parameters:")
         for param, value in grid.best_params_.items():
