@@ -168,6 +168,7 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
             y_enc_pred, y_enc_std = self.estimator_.predict(X, return_std=True)
         except (TypeError, AttributeError):
             # Fallback for models that don't support return_std (e.g., XGBoost)
+            raise ValueError("Std not supported for this regressor type")
             y_enc_pred = self.estimator_.predict(X)
             y_enc_std = None
 
