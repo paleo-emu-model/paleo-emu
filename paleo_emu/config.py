@@ -77,13 +77,13 @@ class _GPRegressorConfig(BaseModel):
         return v
 
 class _XGBRegressorConfig(BaseModel):
-    num_leaves: list[int]
     max_depth: list[int]
     learning_rate: list[float]
     n_estimators: list[int]
     colsample_bytree: list[float]
-    min_child_samples: list[int]       
-    subsample: list[float]   
+    min_child_weight: list[float]       
+    subsample: list[float]
+    
     @field_validator("subsample")
     @classmethod
     def validate_subsample(cls, v: list[float]) -> list[float]:
