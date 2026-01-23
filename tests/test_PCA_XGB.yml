@@ -18,12 +18,12 @@ encoder_config:
 
 regressor_config:
   regressor_type: XGB
-  max_depth: [12, 16, 20]          # 更深树以提升拟合能力
-  learning_rate: [0.03, 0.07, 0.1]     # 更小步长，配合更多树
-  n_estimators: [400, 800, 1600]  # 增加迭代轮次
-  subsample: [0.8, 0.9]           # 控制采样，抑制过拟合
-  colsample_bytree: [0.8, 0.9]    # 特征采样
-  min_child_weight: [3, 5, 10]        # 降低叶子最小权重，让树更容易生长
+  max_depth: [12, 16, 20]          # deeper trees means more complex models
+  learning_rate: [0.03, 0.07, 0.1]     # smaller step size means more trees
+  n_estimators: [400, 800, 1600]  # iteration rounds
+  subsample: [0.8, 0.9]           # control sampling to prevent overfitting
+  colsample_bytree: [0.8, 0.9]    # feature sampling
+  min_child_weight: [3, 5, 10]        # lower leaf weight allows easier tree growth
 
 forcing_data_path: "examples/forcing_data/"
 forcing_data:
