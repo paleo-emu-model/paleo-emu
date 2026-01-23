@@ -108,16 +108,23 @@ class TestTraining(unittest.TestCase):
 
         # Make predictions
         X_pred = load_forcing_data(cfg, scenario=scenario)
-        Y_pred = model.predict(X_pred.to_numpy())
+        
+        # Get predictions with variance
+        Y_pred, Y_std = model.predict_with_variance(X_pred.to_numpy())
 
-        return Y_pred
+        return Y_pred, Y_std
     
 
     def test_run_training_pca_gp(self):
         """Full training run using PCA encoder config with 10% hold-out performance check."""
         artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_GP.yml")
-        Y_pred = self._run_prediction_with_cfg("test_PCA_GP.yml", scenario="800ka")
+        Y_pred, Y_std = self._run_prediction_with_cfg("test_PCA_GP.yml", scenario="800ka")
         self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+        
+        # Print variance info
+        print(f"Prediction shape: {Y_pred.shape}")
+        print(f"Prediction standard deviation shape: {Y_std.shape}")
+        print(f"Mean prediction standard deviation: {np.mean(Y_std):.6f}")
 
     # def test_run_training_pca_xgb(self):
     #     """Full training run using PCA encoder config with 10% hold-out performance check."""

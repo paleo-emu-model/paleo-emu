@@ -26,7 +26,7 @@ from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
 from sklearn.exceptions import ConvergenceWarning
 from paleo_emu.config import PaleoEmuConfig, _GPRegressorConfig,_XGBRegressorConfig, make_kernel
-from paleo_emu.regressor import EncodedTargetRegressor
+from paleo_emu.regressor import EncodedTargetRegressor, GPMultiOutputWithStd
 
 
 class TrainingGenerator:
@@ -134,8 +134,11 @@ class TrainingGenerator:
             ) 
 
 
-        # Wrap in MultiOutputRegressor so we can handle latent_dim > 1 cleanly
-        return MultiOutputRegressor(base_regressor)
+        # Wrap in GPMultiOutputWithStd for GP, regular MultiOutputRegressor for others
+        if type(self.cfg.regressor_config) == _GPRegressorConfig:
+            return GPMultiOutputWithStd(base_regressor)
+        else:
+            return MultiOutputRegressor(base_regressor)
     # ----------------- main training -----------------
     def run_training(self) -> str:
         """Run training and export results as a joblib file.
