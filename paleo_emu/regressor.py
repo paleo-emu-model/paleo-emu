@@ -129,7 +129,7 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         if not check_is_fitted:
             raise RuntimeError("EncodedTargetRegressor is not fitted yet.")
 
-        # Get predictions in encoded space (without std)
+        
         y_enc_pred = self.estimator_.predict(X)
 
         y_enc_pred = np.asarray(y_enc_pred)
