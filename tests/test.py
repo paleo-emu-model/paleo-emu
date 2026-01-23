@@ -49,7 +49,7 @@ class TestTraining(unittest.TestCase):
             Y_train,
             lat_array,
             lon_array,
-            output_dir=str(self.repo_root / "tests"),  # 修改保存路径
+            output_dir=str(self.repo_root / "tests"), 
         )
         artifact_path = training.run_training()
         self.assertTrue(os.path.exists(artifact_path))
@@ -88,7 +88,7 @@ class TestTraining(unittest.TestCase):
 
         self.assertGreater(
             r2,
-            0.98,
+            0.98, # lowered for XGB
             msg=f"Hold-out R^2 too low: {r2}",
         )
 
@@ -115,15 +115,15 @@ class TestTraining(unittest.TestCase):
         return Y_pred, Y_std
     
 
-    # def test_run_training_pca_gp(self):
-    #     """Full training run using PCA encoder config with 10% hold-out performance check."""
-    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_GP.yml")
-    #     Y_pred, Y_std = self._run_prediction_with_cfg("test_PCA_GP.yml", scenario="800ka")
-    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+    def test_run_training_pca_gp(self):
+        """Full training run using PCA encoder config with 10% hold-out performance check."""
+        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_GP.yml")
+        Y_pred, Y_std = self._run_prediction_with_cfg("test_PCA_GP.yml", scenario="800ka")
+        self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
         
-    #     # Print variance info
-    #     print(f"Prediction standard deviation shape: {Y_std.shape}")
-    #     print(f"Mean prediction standard deviation: {np.mean(Y_std):.6f}")
+        # Print variance info
+        print(f"Prediction standard deviation shape: {Y_std.shape}")
+        print(f"Mean prediction standard deviation: {np.mean(Y_std):.6f}")
 
     def test_run_training_pca_xgb(self):
         """Full training run using PCA encoder config with 10% hold-out performance check."""
