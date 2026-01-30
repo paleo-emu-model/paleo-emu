@@ -37,6 +37,7 @@ bibliography: paper.bib
 ---
 
 # Summary
+[comment]: <> (A description of the high-level functionality and purpose of the software for a diverse, non-specialist audience.)
 
 (Paleo)climate models are a key tool for understanding our climate, allowing researchers to explore interaction between Earth's systems (atmosphere, oceans, land, ice) and key climate drivers such as greenhouse gasses. Climate models use large sets of mathematical equations built on fundamental laws of physics to represent key earth system processes, and provided detailed scenarios for temperature, wind, ice cover and other properties for past, present and future climates. While climate models vary greatly in complexity, even relatively simple and low resolution models require significant compute which limit's the number of scenarios (e.g. time periods) for which a given model is applied and can also limit inferences of underlying uncertainties.
 
@@ -48,11 +49,19 @@ Because of it's ease of use and reproducibility, `PaleoEmu` is appropriate to be
 
 
 # Statement of need
+[comment]: <> (A section that clearly illustrates the research purpose of the software and places it in the context of related work. This should clearly state what problems the software is designed to solve, who the target audience is, and its relation to other work.)
 
-`PaleoEmu` is an Python package for the emulation of mean climate states. 
+# State of the field
+[comment]: <> (A description of how this software compares to other commonly-used packages in the research area. If related tools exist, provide a clear “build vs. contribute” justification explaining your unique scholarly contribution and why existing alternatives are insufficient.)
 
+# Software design
+[comment]: <> (An explanation of the trade-offs you weighed, the design/architecture you chose, and why it matters for your research application. This should demonstrate meaningful design thinking beyond a superficial code structure description.)
 
-`Gala` was designed to be used by both climate researchers .
+# Research impact statement
+[comment]: <> (Evidence of realized impact (publications, external use, integrations) or credible near-term significance (benchmarks, reproducible materials, community-readiness signals). The evidence should be compelling and specific, not aspirational.)
+
+# AI usage disclosure
+[comment]: <> (Transparent disclosure of any use of generative AI in the software creation, documentation, or paper authoring. If no AI tools were used, state this explicitly. If AI tools were used, describe how they were used and how the quality and correctness of AI-generated content was verified.)
 
 
 # Citations
