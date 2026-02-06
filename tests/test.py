@@ -113,14 +113,44 @@ class TestTraining(unittest.TestCase):
         Y_pred, Y_std = model.predict_with_variance(X_pred.to_numpy())
 
         return Y_pred, Y_std
-    
+        
+    def _test_unique_kernels(self, cfg_filename: str):
+        model_cfg_path = self.repo_root / "tests" / cfg_filename
+        cfg = load_config(str(model_cfg_path))
+
+        artifact_path = self.repo_root / "tests" / f"{cfg.model_run_name}_fitted_pipeline.joblib"
+        self.assertTrue(os.path.exists(artifact_path))
+        artifact = joblib.load(artifact_path)
+        model = artifact["model"]
+
+        pipe = model.estimator_
+        mor = pipe.named_steps["regressor"]
+
+        length_scales = []
+        noise_levels = []
+
+        for j, gpr in enumerate(mor.estimators_):
+            k = gpr.kernel_
+            length_scales.append(k.k1.length_scale)
+            noise_levels.append(k.k2.noise_level)
+
+        def is_all_ones(x) -> bool:
+            arr = np.asarray(x)
+            return np.all(arr == 1)
+
+        # Fail if *every* estimator kept initial params (== 1 everywhere)
+        self.assertFalse(
+            all(is_all_ones(ls) for ls in length_scales),
+            msg=f"Kernel optimization likely did not run: all length_scales still 1: {length_scales}"
+        )
 
     def test_run_training_pca_gp(self):
         """Full training run using PCA encoder config with 10% hold-out performance check."""
         artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_GP.yml")
         Y_pred, Y_std = self._run_prediction_with_cfg("test_PCA_GP.yml", scenario="800ka")
         self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
-        
+        self._test_unique_kernels("test_PCA_GP.yml")
+
         # Print variance info
         print(f"Prediction standard deviation shape: {Y_std.shape}")
         print(f"Mean prediction standard deviation: {np.mean(Y_std):.6f}")

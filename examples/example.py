@@ -68,15 +68,6 @@ artifact_path = training.run_training()
 artifact = joblib.load(artifact_path)
 model = artifact["model"]
 
-pipe = model.estimator_  # <-- fitted pipeline (NOT model.base_estimator)
-mor  = pipe.named_steps["regressor"]  # MultiOutputRegressor
-
-for j, gpr in enumerate(mor.estimators_):  # <-- fitted GPRs live here
-    k = gpr.kernel_                        # <-- fitted kernel (NOT gpr.kernel)
-
-    # your kernels are (base + WhiteKernel), so base is k.k1
-    print(j, k.k1.length_scale, k.k2.noise_level)
-
 # -------------------------------------------------------------------
 # 3. Predict the full field and pick a sample to plot
 # -------------------------------------------------------------------
