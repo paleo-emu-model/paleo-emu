@@ -13,7 +13,6 @@ This example shows how to
 """
 
 from pathlib import Path
-import os
 
 import joblib
 import numpy as np
@@ -124,7 +123,6 @@ diff_cmap = "coolwarm"
 def setup_map_axis(ax, title):
     ax.set_title(title)
     ax.coastlines(color="black", linewidth=0.5)
-    ax.add_feature(cfeature.BORDERS, edgecolor="black", linewidth=0.3)
     ax.set_global()
     gl = ax.gridlines(draw_labels=True, linestyle="--", linewidth=0.3)
     gl.top_labels = False
