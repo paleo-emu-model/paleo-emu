@@ -10,8 +10,6 @@ This example shows how to
 * plot the original data, the prediction, and their difference
   as three map panels using Cartopy.
 
-The maps use a Plate Carrée projection with coastlines as black lines and a
-colorblind-friendly thermal colormap (``inferno``).
 """
 
 from pathlib import Path
@@ -110,16 +108,16 @@ fig, axes = plt.subplots(
     constrained_layout=True,
 )
 
-# Common vmin/vmax for original & prediction (thermal map)
+# Common vmin/vmax for original & prediction (data map)
 vmin = np.nanmin([y_true, y_pred])
 vmax = np.nanmax([y_true, y_pred])
 
-# Symmetric range for the difference (diverging map)
+# Symmetric range for the difference (difference map)
 diff_absmax = np.nanmax(np.abs(y_diff))
 
-# Data colormap: colorblind-friendly thermal (Matplotlib's 'inferno')
+# Data colormap: 
 data_cmap = "plasma"
-# Difference colormap: colorblind-friendly diverging
+# Difference colormap:
 diff_cmap = "coolwarm"
 
 # Helper to set up each map axis
