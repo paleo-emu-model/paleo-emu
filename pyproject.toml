@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "paleo-emu"
-version = "2025.09.25"
+version = "0.1.0"
 description = "A project for paleo-environmental modeling."
 license = { text = "MIT" }
 readme = "README.md"
