@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "paleo-emu"
-version = "0.1.0"
-description = "A project for paleo-environmental modeling."
+version = "0.1.2"
+description = "paleo-emu: A Python package for flexible and reproducible emulation of the HadCM3 climate model"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
