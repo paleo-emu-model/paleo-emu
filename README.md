@@ -1,5 +1,5 @@
 # paleo-emu
- ![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19632551.svg)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19632551.svg)](https://doi.org/10.5281/zenodo.19632551)
  
 🦕 **Flexible and reproducible emulation of the HadCM3 climate model**
 
