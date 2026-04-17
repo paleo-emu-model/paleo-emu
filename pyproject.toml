@@ -1,23 +1,45 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
 [project]
 name = "paleo-emu"
-version = "0.1.0"
-description = "A project for paleo-environmental modeling."
-license = { text = "MIT" }
+version = "0.1.2"
+description = "paleo-emu: A Python package for flexible and reproducible emulation of the HadCM3 climate model"
 readme = "README.md"
-homepage = "https://github.com/paleo-emu-model/paleo-emu"
-repository = "https://github.com/paleo-emu-model/paleo-emu"
+requires-python = ">=3.10"
+license = { text = "MIT" }
 keywords = ["paleo", "environment", "modeling"]
+dependencies = [
+  "cartopy",
+  "h5netcdf",
+  "joblib",
+  "lightgbm",
+  "matplotlib",
+  "netCDF4",
+  "numpy",
+  "pandas",
+  "Pillow",
+  "pydantic",
+  "PyYAML",
+  "scikit-learn",
+  "tensorflow",
+  "xarray",
+  "xgboost",
+]
 
-[tool.hatch.version]
-path = "paleo_emu/__init__.py"
+[project.optional-dependencies]
+docs = [
+  "pydata-sphinx-theme",
+  "sphinx-gallery",
+]
 
+[project.urls]
+Homepage = "https://github.com/paleo-emu-model/paleo-emu"
+Repository = "https://github.com/paleo-emu-model/paleo-emu"
 
 [tool.hatch.build.targets.sdist]
-include = ["README.md", "LICENSE"]
+include = ["README.md", "LICENSE", "paleo_emu"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["paleo_emu"]
