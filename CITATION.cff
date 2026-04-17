@@ -1,0 +1,13 @@
+cff-version: "1.2.0"
+authors:
+- family-names: Xin
+  given-names: Ren
+  orcid: "https://orcid.org/0000-0003-4849-4671"
+- family-names: de Vries
+  given-names: Joost
+  orcid: "https://orcid.org/0000-0003-3427-6921"
+- family-names: Lunt
+  given-names: Dan
+  orcid: "https://orcid.org/0000-0003-3585-6928"
+
+title: "paleo-emu: A Python package for flexible and reproducible emulation of the HadCM3 climate model"
