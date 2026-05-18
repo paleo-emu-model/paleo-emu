@@ -158,7 +158,7 @@ class TestTraining(unittest.TestCase):
     def test_run_training_pca_xgb(self):
         """Full training run using PCA encoder config with 10% hold-out performance check."""
         artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_PCA_XGB.yml")
-        Y_pred = self._run_prediction_with_cfg("test_PCA_XGB.yml", scenario="800ka")
+        Y_pred, Y_std = self._run_prediction_with_cfg("test_PCA_XGB.yml", scenario="800ka")
         self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
 
 
