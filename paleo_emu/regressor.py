@@ -43,8 +43,8 @@ class GPMultiOutputWithStd(MultiOutputRegressor):
                     _, std = estimator.predict(X, return_std=True)
                     std_list.append(std)
                 except TypeError:
-                    # Estimator doesn't support return_std
-                    std_list.append(np.zeros(X.shape[0]))
+                    # Estimator doesn't support return_std; NaN is more honest than zeros
+                    std_list.append(np.full(X.shape[0], np.nan))
             
             y_std = np.column_stack(std_list)
             return predictions, y_std
