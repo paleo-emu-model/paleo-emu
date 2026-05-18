@@ -57,6 +57,8 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     X = df[column_names].values  # (n_samples, n_features)
 
     ind_co2 = column_names.index('co2')
+    if (X[:, ind_co2] <= 0).any():
+        raise ValueError("CO2 column contains non-positive values; log transform requires CO2 > 0.")
     X[:, ind_co2] = np.log(X[:, ind_co2])
 
     # ---- Load Y (NetCDF) ----
@@ -75,6 +77,12 @@ def load_training_data(model_configuration: PaleoEmuConfig):
 
     Y = ds[var_name].values  # (n_samples, lat, lon)
     Y_flat = Y.reshape(Y.shape[0], -1)
+
+    if X.shape[0] != Y_flat.shape[0]:
+        raise ValueError(
+            f"X and Y sample counts do not match: X has {X.shape[0]} rows "
+            f"({X_path}), Y has {Y_flat.shape[0]} samples ({Y_path})."
+        )
 
     lat_name = dims[1]
     lon_name = dims[2]
@@ -114,6 +122,8 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
     X_pred = df[X_headers].copy()
 
     ind_co2 = X_headers.index('co2')
+    if (X_pred.iloc[:, ind_co2] <= 0).any():
+        raise ValueError("CO2 column contains non-positive values; log transform requires CO2 > 0.")
     X_pred.iloc[:, ind_co2] = np.log(X_pred.iloc[:, ind_co2])
 
     return X_pred
