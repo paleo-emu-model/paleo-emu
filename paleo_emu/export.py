@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import os
+from datetime import datetime
 
 
 
@@ -92,6 +93,7 @@ def save_prediction(Y_pred, Y_var, lat_array, lon_array, output_dir, file_name="
         name="variance"
     )
     ds = xr.Dataset({"prediction": da, "variance": var})
+    ds.attrs["history"] = f"Created by paleo-emu on {datetime.utcnow().strftime('%Y-%m-%d')}"
     save_path = output_dir / f"{file_name}.nc"
     ds.to_netcdf(save_path, engine="h5netcdf")
     print(f"[INFO] Prediction saved to {save_path}")
