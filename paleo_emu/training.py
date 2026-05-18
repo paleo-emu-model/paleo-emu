@@ -202,8 +202,8 @@ class TrainingGenerator:
             "grid_search": grid,
             "lat_array": self.lat_array,
             "lon_array": self.lon_array,
-            "mean_val": getattr(self, "mean_val", None),
-            "std_val": getattr(self, "std_val", None)
+            "mean_val": best_model.mean_val_,
+            "std_val": best_model.std_val_,
         }
         artifact_name = f"{self.cfg.model_run_name}_fitted_pipeline.joblib"
         artifact_path = os.path.join(self.output_dir, artifact_name)

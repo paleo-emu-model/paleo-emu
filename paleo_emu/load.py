@@ -92,10 +92,12 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
 
     base = model_configuration.forcing_data_path
     scenario_cfg = model_configuration.forcing_data.get(scenario)
-    forcing_input = scenario_cfg["forcing_input"]
-    
+    if scenario_cfg is None:
+        raise KeyError(f"Scenario '{scenario}' not found in config. "
+                       f"Available: {list(model_configuration.forcing_data.keys())}")
+    forcing_input = scenario_cfg.get("forcing_input")
     if not forcing_input:
-        raise KeyError("forcing config must include forcing_input")
+        raise KeyError("forcing config must include 'forcing_input'")
 
     forcing_path = base / forcing_input
     if not forcing_path.exists():
@@ -115,9 +117,9 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
     #     raise ValueError("Please 1. reorder your X input or 2. edit Line 112 in paleo_emu/load.py to match your X order.")
    
     df.columns = X_headers + [f"c{i}" for i in range(df.shape[1]-5)]
-    X_pred = df[X_headers]
-    
+    X_pred = df[X_headers].copy()
+
     ind_co2 = X_headers.index('co2')
-    X_pred.iloc[:, ind_co2] = X_pred.iloc[:, ind_co2].apply(lambda x: np.log(x))
+    X_pred.iloc[:, ind_co2] = np.log(X_pred.iloc[:, ind_co2])
 
     return X_pred
