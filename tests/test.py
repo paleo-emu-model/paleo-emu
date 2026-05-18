@@ -92,6 +92,14 @@ class TestTraining(unittest.TestCase):
             msg=f"Hold-out R^2 too low: {r2}",
         )
 
+        # -------------------------------------------------
+        # 3) Physical plausibility: SST range check
+        # -------------------------------------------------
+        pred_min = np.nanmin(Y_pred_full)
+        pred_max = np.nanmax(Y_pred_full)
+        self.assertGreater(pred_min, -100.0, msg=f"Predictions too cold: min={pred_min:.2f}")
+        self.assertLess(pred_max, 100.0, msg=f"Predictions too warm: max={pred_max:.2f}")
+
     def _run_prediction_with_cfg(self, cfg_filename: str, scenario:str):
         model_cfg_path = self.repo_root / "tests" / cfg_filename
 
@@ -151,9 +159,10 @@ class TestTraining(unittest.TestCase):
         self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
         self._test_unique_kernels("test_PCA_GP.yml")
 
-        # Print variance info
-        print(f"Prediction standard deviation shape: {Y_std.shape}")
-        print(f"Mean prediction standard deviation: {np.mean(Y_std):.6f}")
+        # GP uncertainty check: std should be positive
+        self.assertIsNotNone(Y_std, "GP model should return non-None std")
+        self.assertTrue(np.all(Y_std >= 0), "GP std should be non-negative everywhere")
+        self.assertGreater(np.mean(Y_std), 0, "GP mean std should be > 0")
 
     def test_run_training_pca_xgb(self):
         """Full training run using PCA encoder config with 10% hold-out performance check."""
