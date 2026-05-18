@@ -25,7 +25,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
 from sklearn.exceptions import ConvergenceWarning
-from paleo_emu.config import PaleoEmuConfig, _GPRegressorConfig,_XGBRegressorConfig, make_kernel
+from paleo_emu.config import PaleoEmuConfig, _GPRegressorConfig, _XGBRegressorConfig, make_kernel
 from paleo_emu.regressor import EncodedTargetRegressor, GPMultiOutputWithStd
 
 
@@ -84,8 +84,7 @@ class TrainingGenerator:
         ]
 
     def _build_param_grid(self):
-        if type(self.cfg.regressor_config) == _GPRegressorConfig:
-            
+        if isinstance(self.cfg.regressor_config, _GPRegressorConfig):
             kernels = self._build_kernel_candidates()
             # NOTE: parameter path:
             # EncodedTargetRegressor(base_estimator=Pipeline([...]))
@@ -93,7 +92,7 @@ class TrainingGenerator:
             # -> "regressor" step (MultiOutputRegressor)
             # -> underlying estimator (GaussianProcessRegressor) -> "kernel"
             return {"base_estimator__regressor__estimator__kernel": kernels}
-        elif type(self.cfg.regressor_config) == _XGBRegressorConfig:
+        elif isinstance(self.cfg.regressor_config, _XGBRegressorConfig):
             reg_cfg: _XGBRegressorConfig = self.cfg.regressor_config
             param_grid = {
                 "base_estimator__regressor__estimator__max_depth": reg_cfg.max_depth,
@@ -107,9 +106,7 @@ class TrainingGenerator:
 
     def _build_regressor(self) -> MultiOutputRegressor:
         """Build a (potentially) multi-output Gaussian Process regressor."""
-        if type(self.cfg.regressor_config) == _GPRegressorConfig:
-            print("inferred type is Gaussian Process")
-
+        if isinstance(self.cfg.regressor_config, _GPRegressorConfig):
             reg_cfg: _GPRegressorConfig = self.cfg.regressor_config
             base_regressor = GaussianProcessRegressor(
                 normalize_y=True,
@@ -118,9 +115,8 @@ class TrainingGenerator:
                 random_state=self.cfg.random_state,
             )
 
-        elif type(self.cfg.regressor_config) == _XGBRegressorConfig:
+        elif isinstance(self.cfg.regressor_config, _XGBRegressorConfig):
             reg_cfg: _XGBRegressorConfig = self.cfg.regressor_config
-            print("inferred type is XGBoost")
             base_regressor = XGBRegressor(
                 n_estimators=reg_cfg.n_estimators[0],  # Use first value as default
                 max_depth=reg_cfg.max_depth[0],
@@ -134,7 +130,7 @@ class TrainingGenerator:
 
 
         # Wrap in GPMultiOutputWithStd for GP, regular MultiOutputRegressor for others
-        if type(self.cfg.regressor_config) == _GPRegressorConfig:
+        if isinstance(self.cfg.regressor_config, _GPRegressorConfig):
             return GPMultiOutputWithStd(base_regressor)
         else:
             return MultiOutputRegressor(base_regressor)

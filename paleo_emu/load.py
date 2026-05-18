@@ -4,7 +4,6 @@ This module provides functions to load training and forcing data for the paleo-E
 
 from pathlib import Path
 
-import yaml
 import xarray as xr
 import pandas as pd
 import numpy as np
@@ -58,6 +57,8 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     X = df[column_names].values  # (n_samples, n_features)
 
     ind_co2 = column_names.index('co2')
+    if (X[:, ind_co2] <= 0).any():
+        raise ValueError("CO2 column contains non-positive values; log transform requires CO2 > 0.")
     X[:, ind_co2] = np.log(X[:, ind_co2])
 
     # ---- Load Y (NetCDF) ----
@@ -76,6 +77,12 @@ def load_training_data(model_configuration: PaleoEmuConfig):
 
     Y = ds[var_name].values  # (n_samples, lat, lon)
     Y_flat = Y.reshape(Y.shape[0], -1)
+
+    if X.shape[0] != Y_flat.shape[0]:
+        raise ValueError(
+            f"X and Y sample counts do not match: X has {X.shape[0]} rows "
+            f"({X_path}), Y has {Y_flat.shape[0]} samples ({Y_path})."
+        )
 
     lat_name = dims[1]
     lon_name = dims[2]
@@ -109,17 +116,14 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
         raise ValueError(f"Unexpected forcing file shape {df.shape} for {forcing_path}")
     
 
-    X_headers = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice'] 
-    
-    print(f'[INFO] PREDICTION: X inputs should be in order: {X_headers}')
-    # confirm = input(f"Please confirm X columns are in order: {X_headers} (y/n): ").strip().lower()
-    # if confirm != 'y':
-    #     raise ValueError("Please 1. reorder your X input or 2. edit Line 112 in paleo_emu/load.py to match your X order.")
-   
+    X_headers = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
+
     df.columns = X_headers + [f"c{i}" for i in range(df.shape[1]-5)]
     X_pred = df[X_headers].copy()
 
     ind_co2 = X_headers.index('co2')
+    if (X_pred.iloc[:, ind_co2] <= 0).any():
+        raise ValueError("CO2 column contains non-positive values; log transform requires CO2 > 0.")
     X_pred.iloc[:, ind_co2] = np.log(X_pred.iloc[:, ind_co2])
 
     return X_pred

@@ -3,7 +3,7 @@ from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.decomposition import PCA
 from sklearn.multioutput import MultiOutputRegressor
 
-from paleo_emu.encoders import EncoderGenerator, _VAE  # adjust import if needed
+from paleo_emu.encoders import EncoderGenerator, _VAE
 from paleo_emu.config import PaleoEmuConfig
 
 
@@ -44,7 +44,7 @@ class GPMultiOutputWithStd(MultiOutputRegressor):
                     std_list.append(std)
                 except TypeError:
                     # Estimator doesn't support return_std
-                    std_list.append(np.zeros(X.shape[0]))
+                    std_list.append(np.full(X.shape[0], np.nan))
             
             y_std = np.column_stack(std_list)
             return predictions, y_std
