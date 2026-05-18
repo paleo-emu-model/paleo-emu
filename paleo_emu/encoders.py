@@ -35,7 +35,7 @@ class _VAE(keras.Model):
             layers.Dense(2048, activation="relu"),
             layers.Dense(2048, activation="relu"),   
             layers.Dense(1024, activation="relu"),
-            layers.Dense(7008)
+            layers.Dense(input_dim)
         ])
     def get_config(self):
         config = super().get_config()
