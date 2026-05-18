@@ -3,7 +3,7 @@ from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.decomposition import PCA
 from sklearn.multioutput import MultiOutputRegressor
 
-from paleo_emu.encoders import EncoderGenerator, _VAE  # adjust import if needed
+from paleo_emu.encoders import EncoderGenerator, _VAE
 from paleo_emu.config import PaleoEmuConfig
 
 
