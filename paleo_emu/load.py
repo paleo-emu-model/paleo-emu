@@ -4,7 +4,6 @@ This module provides functions to load training and forcing data for the paleo-E
 
 from pathlib import Path
 
-import yaml
 import xarray as xr
 import pandas as pd
 import numpy as np
@@ -109,13 +108,8 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
         raise ValueError(f"Unexpected forcing file shape {df.shape} for {forcing_path}")
     
 
-    X_headers = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice'] 
-    
-    print(f'[INFO] PREDICTION: X inputs should be in order: {X_headers}')
-    # confirm = input(f"Please confirm X columns are in order: {X_headers} (y/n): ").strip().lower()
-    # if confirm != 'y':
-    #     raise ValueError("Please 1. reorder your X input or 2. edit Line 112 in paleo_emu/load.py to match your X order.")
-   
+    X_headers = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
+
     df.columns = X_headers + [f"c{i}" for i in range(df.shape[1]-5)]
     X_pred = df[X_headers].copy()
 
