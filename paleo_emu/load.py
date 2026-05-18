@@ -92,10 +92,12 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
 
     base = model_configuration.forcing_data_path
     scenario_cfg = model_configuration.forcing_data.get(scenario)
-    forcing_input = scenario_cfg["forcing_input"]
-    
+    if scenario_cfg is None:
+        raise KeyError(f"Scenario '{scenario}' not found in config. "
+                       f"Available: {list(model_configuration.forcing_data.keys())}")
+    forcing_input = scenario_cfg.get("forcing_input")
     if not forcing_input:
-        raise KeyError("forcing config must include forcing_input")
+        raise KeyError("forcing config must include 'forcing_input'")
 
     forcing_path = base / forcing_input
     if not forcing_path.exists():
