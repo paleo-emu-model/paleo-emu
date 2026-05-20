@@ -207,6 +207,9 @@ class PaleoEmuConfig(BaseModel):
     forcing_data_path: Path
     forcing_data: dict[str, dict[str, str]]
 
+    output_dir: Optional[Path] = None
+    artifact_name: Optional[str] = None
+
     @field_validator("X_column_names")
     @classmethod
     def validate_x_column_names(cls, v: List[str]) -> List[str]:

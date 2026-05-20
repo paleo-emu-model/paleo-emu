@@ -4,10 +4,10 @@ random_state: 29
 training_file_path: "examples/training_data/"
 X_input_file_name: "training_data_lowmodice_temp_formatted.res"
 Y_input_file_name: "training_data_lowmodice_temp_formatted.nc"
-# training_file_path: "../NWS_emulation/emulator_validation/paleo-emu-LOO/training_data/"
-# X_input_file_name: "emul_in_X_train_0.res"
-# Y_input_file_name: "emul_in_Y_train_0.nc"
 X_column_names: ["co2", "obliquity", "esinw", "ecosw", "ice"]
+
+output_dir: /Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/tests/
+artifact_name: test_PCA_GP.joblib
 
 cv:
   folds: 10
