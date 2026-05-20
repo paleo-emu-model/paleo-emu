@@ -57,7 +57,8 @@ class TestTraining(unittest.TestCase):
         # Return everything needed for checks
         return artifact_path, X_full, X_test, Y_test
 
-    def _check_artifact_and_predictions(self, artifact_path, X_full, X_test, Y_test):
+    def _check_artifact_and_predictions(self, artifact_path, X_full, X_test, Y_test,
+                                          r2_threshold=0.98, mean_delta=0.05):
         # Load the artifact
         artifact = joblib.load(artifact_path)
 
@@ -73,24 +74,16 @@ class TestTraining(unittest.TestCase):
         # -------------------------------------------------
         Y_pred_full = model.predict(X_full)
         field_mean = np.mean(Y_pred_full)
-        self.assertAlmostEqual(field_mean, 5.3, delta=0.05)
+        self.assertAlmostEqual(field_mean, 5.3, delta=mean_delta)
         print(f"Mean temperature: {field_mean}")
 
         # -------------------------------------------------
-        # 2) Performance check on 20% hold-out set
+        # 2) Performance check on 10% hold-out set
         # -------------------------------------------------
         Y_pred_test = model.predict(X_test)
-
-        # R^2 averaged over all outputs
         r2 = r2_score(Y_test, Y_pred_test, multioutput="uniform_average")
-
         print(f"Hold-out R^2: {r2}")
-
-        self.assertGreater(
-            r2,
-            0.98, # lowered for XGB
-            msg=f"Hold-out R^2 too low: {r2}",
-        )
+        self.assertGreater(r2, r2_threshold, msg=f"Hold-out R^2 too low: {r2}")
 
         # -------------------------------------------------
         # 3) Physical plausibility: SST range check
@@ -100,14 +93,23 @@ class TestTraining(unittest.TestCase):
         self.assertGreater(pred_min, -100.0, msg=f"Predictions too cold: min={pred_min:.2f}")
         self.assertLess(pred_max, 100.0, msg=f"Predictions too warm: max={pred_max:.2f}")
 
+    def _resolve_artifact_path(self, cfg) -> Path:
+        """Resolve artifact path from config, treating relative output_dir as relative to repo root."""
+        if cfg.output_dir is not None:
+            artifact_dir = self.repo_root / cfg.output_dir
+        else:
+            artifact_dir = self.repo_root / "tests"
+        artifact_filename = cfg.artifact_name if cfg.artifact_name is not None else f"{cfg.model_run_name}_fitted_pipeline.joblib"
+        return artifact_dir / artifact_filename
+
     def _run_prediction_with_cfg(self, cfg_filename: str, scenario:str):
         model_cfg_path = self.repo_root / "tests" / cfg_filename
 
         # Use the typed loader (PaleoEmuConfig)
         cfg = load_config(str(model_cfg_path))
 
-        # Load the trained model artifact (same path as training saves to)
-        artifact_path = self.repo_root / "tests" / f"{cfg.model_run_name}_fitted_pipeline.joblib"
+        # Resolve artifact path: use config's output_dir/artifact_name if set, else defaults
+        artifact_path = self._resolve_artifact_path(cfg)
         self.assertTrue(os.path.exists(artifact_path))
         artifact = joblib.load(artifact_path)
 
@@ -126,7 +128,7 @@ class TestTraining(unittest.TestCase):
         model_cfg_path = self.repo_root / "tests" / cfg_filename
         cfg = load_config(str(model_cfg_path))
 
-        artifact_path = self.repo_root / "tests" / f"{cfg.model_run_name}_fitted_pipeline.joblib"
+        artifact_path = self._resolve_artifact_path(cfg)
         self.assertTrue(os.path.exists(artifact_path))
         artifact = joblib.load(artifact_path)
         model = artifact["model"]
@@ -171,11 +173,21 @@ class TestTraining(unittest.TestCase):
         self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
 
 
-    # def test_run_training_vae(self):
-    #     """Full training run using VAE (learned encoder) config with 10% hold-out performance check."""
-    #     artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE.yml")
-    #     Y_pred, Y_std = self._run_prediction_with_cfg("test_VAE.yml", scenario="800ka")
-    #     self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test)
+    def test_run_training_vae_gp(self):
+        """VAE encoder + GP regressor — smoke test (10 epochs, checks code runs and output is physical)."""
+        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE_GP.yml")
+        Y_pred, Y_std = self._run_prediction_with_cfg("test_VAE_GP.yml", scenario="800ka")
+        self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test,
+                                              r2_threshold=-1.0, mean_delta=50.0)
+        self.assertIsNotNone(Y_std, "GP model should return non-None std")
+        self.assertGreater(np.mean(Y_std), 0, "GP mean std should be > 0")
+
+    def test_run_training_vae_xgb(self):
+        """VAE encoder + XGBoost regressor — smoke test (10 epochs, checks code runs and output is physical)."""
+        artifact_path, X_full, X_test, Y_test = self._run_training_with_cfg("test_VAE_XGB.yml")
+        Y_pred, Y_std = self._run_prediction_with_cfg("test_VAE_XGB.yml", scenario="800ka")
+        self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test,
+                                              r2_threshold=-1.0, mean_delta=50.0)
 
 
 if __name__ == "__main__":

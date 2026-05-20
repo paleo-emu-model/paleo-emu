@@ -1,4 +1,4 @@
-model_run_name: "test_PCA_GP"
+model_run_name: "test_vae"
 random_state: 29
 
 training_file_path: "examples/training_data/"
@@ -6,25 +6,24 @@ X_input_file_name: "training_data_lowmodice_temp_formatted.res"
 Y_input_file_name: "training_data_lowmodice_temp_formatted.nc"
 X_column_names: ["co2", "obliquity", "esinw", "ecosw", "ice"]
 
-output_dir: "tests/" # optional, default is "models/"
-artifact_name: "test_PCA_GP.joblib" # optional, default is "{model_run_name}.joblib". 
-
 cv:
-  folds: 3        # CI fast: 3; recommended full training: 10
-  n_jobs: -1
+  folds: 2        # full training: 3？
+  n_jobs: 1       # must be 1 for VAE (TensorFlow incompatible with multiprocessing)
   scoring: neg_mean_squared_error
 
 encoder_config:
-  encoder_type: PCA
-  n_components: 5
-  pca_variance_ratio: 0.999
+  latent_dim: 8
+  epochs: 10          # full training: 200 or more
+  learning_rate: 1e-4
+  batch_size: 16
+  kl_weight: 0.1
 
 regressor_config:
   kernels:
     - RBF
     - Matern_nu_15
     - Matern_nu_25
-  n_restarts_optimizer: 1  # full training: 5
+  n_restarts_optimizer: 5
   whitekernel_noise_level: 1e-2
   whitekernel_noise_level_bounds: [1e-5, 1e1]
 
