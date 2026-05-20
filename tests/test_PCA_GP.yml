@@ -6,8 +6,8 @@ X_input_file_name: "training_data_lowmodice_temp_formatted.res"
 Y_input_file_name: "training_data_lowmodice_temp_formatted.nc"
 X_column_names: ["co2", "obliquity", "esinw", "ecosw", "ice"]
 
-output_dir: /Users/bo20541/Library/CloudStorage/OneDrive-UniversityofBristol/TONIC-Oligocene/paleo-emu/tests/
-artifact_name: test_PCA_GP.joblib
+output_dir: "tests/"
+artifact_name: "test_PCA_GP.joblib"
 
 cv:
   folds: 10
