@@ -1,0 +1,35 @@
+model_run_name: "example_PCA_GP"
+random_state: 29
+
+training_file_path: "examples/training_data/"
+X_input_file_name: ["training_data_lowmodice_temp_formatted.res"]
+Y_input_file_name: ["training_data_lowmodice_temp_formatted.nc"]
+X_column_names: ["co2", "obliquity", "esinw", "ecosw", "ice"]
+# Y_fill_value: -999.0  # optional: manually specify fill value if NC _FillValue is not set
+
+output_dir: "examples/pretrained/"
+artifact_name: "example_PCA_GP.joblib"
+
+cv:
+  folds: 10
+  n_jobs: -1
+  scoring: neg_mean_squared_error
+
+encoder_config:
+  encoder_type: PCA
+  n_components: 5
+  pca_variance_ratio: 0.999
+
+regressor_config:
+  kernels:
+    - RBF
+    - Matern_nu_15
+    - Matern_nu_25
+  n_restarts_optimizer: 5
+  whitekernel_noise_level: 1e-2
+  whitekernel_noise_level_bounds: [1e-5, 1e1]
+
+forcing_data_path: "examples/forcing_data/"
+forcing_data:
+  SSP585:
+    forcing_input: "Forcings_SSP585_since2000.res"
