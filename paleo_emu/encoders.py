@@ -213,6 +213,7 @@ class EncoderGenerator:
                     ) * kl_weight
 
                 grads = tape.gradient(loss, vae_model.trainable_variables)
+                grads, _ = tf.clip_by_global_norm(grads, 1.0)
                 optimizer.apply_gradients(zip(grads, vae_model.trainable_variables))
                 total_loss += float(loss.numpy())
 
