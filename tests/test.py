@@ -118,7 +118,7 @@ class TestTraining(unittest.TestCase):
         X_pred = load_forcing_data(cfg, scenario=scenario)
         
         # Get predictions with variance
-        Y_pred, Y_std = model.predict_with_variance(X_pred.to_numpy())
+        Y_pred, Y_std = model.predict_with_variance(X_pred)
 
         return Y_pred, Y_std
         

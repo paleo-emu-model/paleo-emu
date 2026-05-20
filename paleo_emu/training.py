@@ -192,17 +192,22 @@ class TrainingGenerator:
         best_model = grid.best_estimator_
 
         # export with joblib
-        os.makedirs(self.output_dir, exist_ok=True)
+        output_dir = str(self.cfg.output_dir) if self.cfg.output_dir is not None else self.output_dir
+        os.makedirs(output_dir, exist_ok=True)
         artifact = {
-            "model": best_model,                 # EncodedTargetRegressor (bare regressor)（contains scaler/encoder/regressor）
+            "model": best_model,
             "grid_search": grid,
             "lat_array": self.lat_array,
             "lon_array": self.lon_array,
             "mean_val": best_model.mean_val_,
             "std_val": best_model.std_val_,
         }
-        artifact_name = f"{self.cfg.model_run_name}_fitted_pipeline.joblib"
-        artifact_path = os.path.join(self.output_dir, artifact_name)
+        artifact_name = (
+            self.cfg.artifact_name
+            if self.cfg.artifact_name is not None
+            else f"{self.cfg.model_run_name}_fitted_pipeline.joblib"
+        )
+        artifact_path = os.path.join(output_dir, artifact_name)
 
         joblib.dump(artifact, artifact_path)
         print(f"[INFO] Saved fitted model artifact to {artifact_path}")
