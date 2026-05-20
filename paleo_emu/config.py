@@ -209,6 +209,7 @@ class PaleoEmuConfig(BaseModel):
 
     output_dir: Optional[Path] = None
     artifact_name: Optional[str] = None
+    Y_fill_value: Optional[float] = None  # manual fill value (e.g. -999, 1e30)
 
     @field_validator("X_column_names")
     @classmethod

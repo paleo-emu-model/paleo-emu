@@ -33,7 +33,7 @@ class TestTraining(unittest.TestCase):
         cfg = load_config(str(model_cfg_path))
 
         # Load full training data from disk
-        X_full, Y_full, _, _, lat_array, lon_array = load_training_data(cfg)
+        X_full, Y_full, _, _, lat_array, lon_array, _ = load_training_data(cfg)
 
         # 80/20 train–test split for performance evaluation
         X_train, X_test, Y_train, Y_test = train_test_split(

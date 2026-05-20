@@ -35,7 +35,7 @@ repo_root = here.parent
 model_cfg_path = repo_root / "tests" / "test_PCA_GP.yml"
 cfg = load_config(str(model_cfg_path))
 
-X_full, Y_full, _, _, lat_array, lon_array = load_training_data(cfg)
+X_full, Y_full, _, _, lat_array, lon_array, _ = load_training_data(cfg)
 
 X_train, X_test, Y_train, Y_test = train_test_split(
     X_full,
