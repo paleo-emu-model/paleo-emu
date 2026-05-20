@@ -36,16 +36,19 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     column_names = model_configuration.X_column_names
 
     training_dir = Path(training_dir)
-    X_path = training_dir / X_name
-    Y_path = training_dir / Y_name
+    X_paths = [training_dir / n for n in X_name] if isinstance(X_name, list) else [training_dir / X_name]
+    Y_paths = [training_dir / n for n in Y_name] if isinstance(Y_name, list) else [training_dir / Y_name]
 
     # ---- Load X (.res whitespace-delimited) ----
-    df = pd.read_csv(X_path, sep=r"\s+", header=None)
+    df = pd.concat(
+        [pd.read_csv(p, sep=r"\s+", header=None) for p in X_paths],
+        ignore_index=True,
+    ) if len(X_paths) > 1 else pd.read_csv(X_paths[0], sep=r"\s+", header=None)
 
     n_features = len(column_names)
     if df.shape[1] < n_features:
         raise ValueError(
-            f"Unexpected X shape {df.shape} for {X_path} "
+            f"Unexpected X shape {df.shape} for {X_paths} "
             f"(needs at least {n_features} columns)"
         )
 
@@ -62,18 +65,26 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     X[:, ind_co2] = np.log(X[:, ind_co2])
 
     # ---- Load Y (NetCDF) ----
-    ds = xr.open_dataset(Y_path, engine="h5netcdf")
+    ds0 = xr.open_dataset(Y_paths[0], engine="h5netcdf")
 
-    # Check if there are data variables; if not, look for the first non-coordinate variable
-    if len(ds.data_vars) > 0:
-        var_name = list(ds.data_vars)[0]
+    if len(ds0.data_vars) > 0:
+        var_name = list(ds0.data_vars)[0]
     else:
-        # Fallback: get the first coordinate variable that has multiple dimensions
-        var_name = [v for v in ds.coords if len(ds[v].dims) > 1][0]
+        var_name = [v for v in ds0.coords if len(ds0[v].dims) > 1][0]
+
+    sample_dim = ds0[var_name].dims[0]  # e.g. "time", "case", etc.
+
+    if len(Y_paths) > 1:
+        ds = xr.concat(
+            [ds0] + [xr.open_dataset(p, engine="h5netcdf") for p in Y_paths[1:]],
+            dim=sample_dim,
+        )
+    else:
+        ds = ds0
 
     dims = ds[var_name].dims
     if len(dims) < 3:
-        raise ValueError(f"Unexpected Y dims {dims} in {Y_path}")
+        raise ValueError(f"Unexpected Y dims {dims} in {Y_paths}")
 
     Y = ds[var_name].values  # (n_samples, lat, lon)
     Y_flat = Y.reshape(Y.shape[0], -1)
@@ -81,7 +92,7 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     if X.shape[0] != Y_flat.shape[0]:
         raise ValueError(
             f"X and Y sample counts do not match: X has {X.shape[0]} rows "
-            f"({X_path}), Y has {Y_flat.shape[0]} samples ({Y_path})."
+            f"({X_paths}), Y has {Y_flat.shape[0]} samples ({Y_paths})."
         )
 
     lat_name = dims[1]

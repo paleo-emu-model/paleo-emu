@@ -201,8 +201,8 @@ class PaleoEmuConfig(BaseModel):
     encoder_config: Union[_PCAEncoderConfig, _LearnedEncoderConfig]
 
     training_file_path: Path
-    X_input_file_name: str
-    Y_input_file_name: str
+    X_input_file_name: Union[str, List[str]]
+    Y_input_file_name: Union[str, List[str]]
     X_column_names: List[str]
     forcing_data_path: Path
     forcing_data: dict[str, dict[str, str]]
