@@ -1,0 +1,33 @@
+model_run_name: "test_VAE_XGB"
+random_state: 29
+
+training_file_path: "examples/training_data/"
+X_input_file_name: "training_data_lowmodice_temp_formatted.res"
+Y_input_file_name: "training_data_lowmodice_temp_formatted.nc"
+X_column_names: ["co2", "obliquity", "esinw", "ecosw", "ice"]
+
+cv:
+  folds: 3
+  n_jobs: 1
+  scoring: neg_mean_squared_error
+
+encoder_config:
+  latent_dim: 8
+  epochs: 200
+  learning_rate: 1e-4
+  batch_size: 16
+  kl_weight: 0.1
+
+regressor_config:
+  regressor_type: XGB
+  max_depth: [6]
+  learning_rate: [0.1]
+  n_estimators: [100]
+  subsample: [0.8]
+  colsample_bytree: [0.8]
+  min_child_weight: [3.0]
+
+forcing_data_path: "examples/forcing_data/"
+forcing_data:
+  800ka:
+    forcing_input: "Paleo_forcings_800ka_xin.res"
