@@ -201,6 +201,7 @@ class TrainingGenerator:
             "lon_array": self.lon_array,
             "mean_val": best_model.mean_val_,
             "std_val": best_model.std_val_,
+            "nan_mask": best_model.nan_mask_,
         }
         artifact_name = (
             self.cfg.artifact_name

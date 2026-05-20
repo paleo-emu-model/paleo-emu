@@ -104,6 +104,9 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         if Y_encoded.ndim == 1:
             Y_encoded = Y_encoded.reshape(-1, 1)
 
+        # NaN mask: True where any training sample is NaN (e.g. land grid points)
+        self.nan_mask_ = np.any(~np.isfinite(y_arr), axis=0)
+
         # clone and fit base estimator
         self.estimator_ = clone(self.base_estimator)
         self.estimator_.fit(X, Y_encoded)
@@ -142,6 +145,8 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
 
         # Decode to original space and return
         y_pred = self._decode(y_enc_pred)
+        if np.any(self.nan_mask_):
+            y_pred[:, self.nan_mask_] = np.nan
         return y_pred
 
     def predict_with_variance(self, X):
@@ -180,7 +185,9 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
             return y_enc_pred, y_enc_std
 
         y_pred = self._decode(y_enc_pred)
-        
+        if np.any(self.nan_mask_):
+            y_pred[:, self.nan_mask_] = np.nan
+
         # Decode std to original space if available
         if y_enc_std is not None:
             # Variance propagation through PCA: for each sample and spatial location,
@@ -201,7 +208,10 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
             y_std_decoded = (y_std_latent_space - eps) * self.std_val_
         else:
             y_std_decoded = None
-        
+
+        if y_std_decoded is not None and np.any(self.nan_mask_):
+            y_std_decoded[:, self.nan_mask_] = np.nan
+
         return y_pred, y_std_decoded
 
     def predict_encoded(self, X):

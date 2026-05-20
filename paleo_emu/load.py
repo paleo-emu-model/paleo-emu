@@ -2,13 +2,74 @@
 This module provides functions to load training and forcing data for the paleo-EMU.
 """
 
+import os
+import warnings
 from pathlib import Path
 
 import xarray as xr
 import pandas as pd
 import numpy as np
 
-from paleo_emu.config import PaleoEmuConfig 
+from paleo_emu.config import PaleoEmuConfig
+
+# Common sentinel/fill values used in climate model outputs and NetCDF conventions
+_COMMON_FILL_VALUES = [0.0, -999.0, -9999.0, -99999.0, 1e20, 1e30, -1e30, 9.96921e+36]
+
+
+def _check_suspicious_values(Y_flat: np.ndarray) -> None:
+    """
+    Check if nan value has been correctly handled by checking if all 
+    time slices contain >20% of grid points matching common
+    fill/sentinel values (0, -999, 1e30, etc.).  If so, print a warning and
+    ask the user to confirm before continuing.  In non-interactive environments
+    (TESTING=true) the check is skipped.
+    """
+    suspicious = np.zeros(Y_flat.shape, dtype=bool)
+    for v in _COMMON_FILL_VALUES:
+        if v == 0.0:
+            suspicious |= (Y_flat == 0.0)
+        else:
+            suspicious |= np.isclose(Y_flat, v, rtol=1e-5, atol=0)
+
+    # fraction of suspicious grid points per time slice
+    frac_per_sample = suspicious.mean(axis=1)
+
+    if not np.all(frac_per_sample > 0.20):
+        return  # looks fine
+
+    overall_frac = suspicious.mean()
+    msg = (
+        f"\n{'='*60}\n"
+        f"WARNING: Possible unmasked missing values detected in Y.\n"
+        f"\n"
+        f"Across all {Y_flat.shape[0]} time slices, {overall_frac:.1%} of grid points\n"
+        f"share values that resemble common fill/missing-value sentinels\n"
+        f"(e.g. 0, -999, -9999, 1e30).\n"
+        f"\n"
+        f"Please check whether the _FillValue / missing_value attribute in your\n"
+        f"NetCDF file is correctly defined. These suspicious grid points may be\n"
+        f"land or ocean points that were not properly masked.\n"
+        f"\n"
+        f"Tip: if your file uses a non-standard fill value, set 'Y_fill_value'\n"
+        f"in your YAML config (e.g.  Y_fill_value: -999.0) to mask it explicitly.\n"
+        f"{'='*60}"
+    )
+
+    if os.environ.get("TESTING", "").lower() == "true":
+        warnings.warn(msg, UserWarning, stacklevel=3)
+        return
+
+    print(msg)
+    try:
+        response = input("Type 'y' to continue anyway, or press Enter to abort: ")
+    except EOFError:
+        response = ""
+
+    if response.strip().lower() != "y":
+        raise RuntimeError(
+            "Aborted by user: suspicious fill values in Y. "
+            "Set 'Y_fill_value' in your YAML config and re-run."
+        )
 
 def load_training_data(model_configuration: PaleoEmuConfig):
     """
@@ -86,8 +147,19 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     if len(dims) < 3:
         raise ValueError(f"Unexpected Y dims {dims} in {Y_paths}")
 
-    Y = ds[var_name].values  # (n_samples, lat, lon)
+    Y = ds[var_name].values.astype(float)  # (n_samples, lat, lon); cast so we can write NaN
     Y_flat = Y.reshape(Y.shape[0], -1)
+
+    # Apply user-specified fill value (replaces it with NaN before mask building)
+    fill_value = model_configuration.Y_fill_value
+    if fill_value is not None:
+        Y_flat[np.isclose(Y_flat, fill_value, rtol=1e-5, atol=0)] = np.nan
+
+    # Check for common sentinel values that were NOT declared as _FillValue
+    _check_suspicious_values(Y_flat)
+
+    # NaN mask: True where any sample is non-finite (NaN or inf)
+    nan_mask = np.any(~np.isfinite(Y_flat), axis=0)
 
     if X.shape[0] != Y_flat.shape[0]:
         raise ValueError(
@@ -100,7 +172,7 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     lat_array = ds[lat_name].values
     lon_array = ds[lon_name].values
 
-    return X, Y_flat, var_name, (Y.shape[1], Y.shape[2]), lat_array, lon_array
+    return X, Y_flat, var_name, (Y.shape[1], Y.shape[2]), lat_array, lon_array, nan_mask
 
 def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
     """
