@@ -7,7 +7,8 @@ Y_input_file_name: ["training_data_lowmodice_temp_formatted.nc"]
 X_column_names: ["co2", "obliquity", "esinw", "ecosw", "ice"]
 
 output_dir: "tests/" # optional, default is "models/"
-artifact_name: "test_PCA_GP.joblib" # optional, default is "{model_run_name}.joblib". 
+artifact_name: "test_PCA_GP.joblib" # optional, default is "{model_run_name}.joblib"
+# Y_fill_value: -999.0  # optional: manually specify fill value if NC _FillValue is not set
 
 cv:
   folds: 3        # CI fast: 3; recommended full training: 10
