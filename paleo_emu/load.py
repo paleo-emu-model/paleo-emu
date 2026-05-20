@@ -126,4 +126,4 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
         raise ValueError("CO2 column contains non-positive values; log transform requires CO2 > 0.")
     X_pred.iloc[:, ind_co2] = np.log(X_pred.iloc[:, ind_co2])
 
-    return X_pred
+    return X_pred.to_numpy()
