@@ -31,5 +31,32 @@ regressor_config:
 
 forcing_data_path: "examples/forcing_data/"
 forcing_data:
-  SSP585:
-    forcing_input: "Forcings_SSP585_since2000.res"
+
+  # Case 1 — single file
+  Forcing: 
+    SSP585:
+      forcing_input: "Forcings_SSP585_since2000.res"
+
+  Experiments:
+    Case_1:
+      forcing_input: "Forcings_Experiment_Case1.res"
+    Case_2:
+      forcing_input: "Forcings_Experiment_Case2.res"
+    Case_3:
+      forcing_input: "Forcings_Experiment_Case3.res"
+
+
+
+  # Case 1b — another single file (uncomment to use)
+  # SSP126:
+  #   forcing_input: "Forcings_SSP126_since2000.res"
+
+  # Case 2 — ensemble members: expands to member001.res … member090.res
+  # past800ka_ens:
+  #   forcing_input_pattern: "Forcings_past800ka_member{member}.res"
+  #   member: "1-90"
+
+  # Case 3 — one file per variable
+  # past800ka_var:
+  #   forcing_input_pattern: "Forcings_past800ka_{var}.res"
+  #   var: ["sst", "precip", "co2"]
