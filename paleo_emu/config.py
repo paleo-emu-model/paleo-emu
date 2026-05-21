@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Tuple
+from typing import Any, List, Optional, Union, Tuple
 import yaml
 from pydantic import BaseModel, field_validator, ValidationError, model_validator, ConfigDict
 from pathlib import Path
@@ -205,7 +205,7 @@ class PaleoEmuConfig(BaseModel):
     Y_input_file_name: Union[str, List[str]]
     X_column_names: List[str]
     forcing_data_path: Path
-    forcing_data: dict[str, dict[str, str]]
+    forcing_data: dict[str, dict[str, Any]]
 
     output_dir: Optional[Path] = None
     artifact_name: Optional[str] = None
