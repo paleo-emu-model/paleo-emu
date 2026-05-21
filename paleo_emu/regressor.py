@@ -85,12 +85,18 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         """Fit encoder (PCA or VAE) on y, then fit base_estimator on encoded y."""
         # store y shape for sanity/debug
         
-        y_arr = np.asarray(y)
+        y_arr = np.asarray(y, dtype=float)
         if y_arr.ndim == 1:
             y_arr = y_arr.reshape(-1, 1)
-        self.n_outputs_ = y_arr.shape[1]
+        self.n_outputs_ = y_arr.shape[1]  # full grid size (including NaN cols)
 
-        # build encoder and encode y
+        # NaN mask must be computed BEFORE encoding so we can remove NaN columns
+        # True at grid points that are NaN in at least one training sample (e.g. land)
+        self.nan_mask_ = np.any(~np.isfinite(y_arr), axis=0)
+        if np.any(self.nan_mask_):
+            y_arr = y_arr[:, ~self.nan_mask_]  # remove NaN columns before PCA/VAE
+
+        # build encoder and encode y (on valid columns only)
         enc_gen = EncoderGenerator(y_arr, self.model_config)
         Y_encoded, encoder_model, mean_val, std_val = enc_gen.generate_encoder()
 
@@ -103,9 +109,6 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         Y_encoded = np.asarray(Y_encoded)
         if Y_encoded.ndim == 1:
             Y_encoded = Y_encoded.reshape(-1, 1)
-
-        # NaN mask: True where any training sample is NaN (e.g. land grid points)
-        self.nan_mask_ = np.any(~np.isfinite(y_arr), axis=0)
 
         # clone and fit base estimator
         self.estimator_ = clone(self.base_estimator)
@@ -143,11 +146,9 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
             # Return encoded predictions only
             return y_enc_pred
 
-        # Decode to original space and return
+        # Decode to valid-column space, then reconstruct full grid
         y_pred = self._decode(y_enc_pred)
-        if np.any(self.nan_mask_):
-            y_pred[:, self.nan_mask_] = np.nan
-        return y_pred
+        return self._reconstruct(y_pred)
 
     def predict_with_variance(self, X):
         """
@@ -184,9 +185,7 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
             # Return encoded predictions with std
             return y_enc_pred, y_enc_std
 
-        y_pred = self._decode(y_enc_pred)
-        if np.any(self.nan_mask_):
-            y_pred[:, self.nan_mask_] = np.nan
+        y_pred = self._reconstruct(self._decode(y_enc_pred))
 
         # Decode std to original space if available
         if y_enc_std is not None:
@@ -209,8 +208,8 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         else:
             y_std_decoded = None
 
-        if y_std_decoded is not None and np.any(self.nan_mask_):
-            y_std_decoded[:, self.nan_mask_] = np.nan
+        if y_std_decoded is not None:
+            y_std_decoded = self._reconstruct(y_std_decoded)
 
         return y_pred, y_std_decoded
 
@@ -226,6 +225,14 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         return np.asarray(y_enc_pred)
     
     # ----------------- helpers -----------------
+    def _reconstruct(self, y_valid: np.ndarray) -> np.ndarray:
+        """Expand valid-column predictions back to the full grid, with NaN at masked locations."""
+        if not np.any(self.nan_mask_):
+            return y_valid
+        y_full = np.full((y_valid.shape[0], self.n_outputs_), np.nan)
+        y_full[:, ~self.nan_mask_] = y_valid
+        return y_full
+
     def _decode(self, y_enc):
         """
         Decode encoded predictions back to original Y space,

@@ -1,17 +1,17 @@
-model_run_name: "test_PCA_GP"
+model_run_name: "example_PCA_GP"
 random_state: 29
 
 training_file_path: "examples/training_data/"
 X_input_file_name: ["training_data_lowmodice_temp_formatted.res"]
 Y_input_file_name: ["training_data_lowmodice_temp_formatted.nc"]
 X_column_names: ["co2", "obliquity", "esinw", "ecosw", "ice"]
-
-output_dir: "tests/" # optional, default is "models/"
-artifact_name: "test_PCA_GP.joblib" # optional, default is "{model_run_name}.joblib"
 # Y_fill_value: -999.0  # optional: manually specify fill value if NC _FillValue is not set
 
+output_dir: "examples/pretrained/"
+artifact_name: "example_PCA_GP.joblib"
+
 cv:
-  folds: 3        # CI fast: 3; recommended full training: 10
+  folds: 10
   n_jobs: -1
   scoring: neg_mean_squared_error
 
@@ -25,11 +25,11 @@ regressor_config:
     - RBF
     - Matern_nu_15
     - Matern_nu_25
-  n_restarts_optimizer: 1  # full training: 5
+  n_restarts_optimizer: 5
   whitekernel_noise_level: 1e-2
   whitekernel_noise_level_bounds: [1e-5, 1e1]
 
 forcing_data_path: "examples/forcing_data/"
 forcing_data:
-  800ka:
-    forcing_input: "Paleo_forcings_800ka_xin.res"
+  SSP585:
+    forcing_input: "Forcings_SSP585_since2000.res"

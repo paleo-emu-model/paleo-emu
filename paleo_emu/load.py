@@ -193,15 +193,23 @@ def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
     if not forcing_path.exists():
         raise FileNotFoundError(f"forcing file not found: {forcing_path}")
 
-    df = pd.read_csv(forcing_path, sep=r"\s+", skiprows=0, header=None)
-    
-    if df.shape[1] < 5:
-        raise ValueError(f"Unexpected forcing file shape {df.shape} for {forcing_path}")
-    
-
     X_headers = ['co2', 'obliquity', 'esinw', 'ecosw', 'ice']
 
-    df.columns = X_headers + [f"c{i}" for i in range(df.shape[1]-5)]
+    # Auto-detect whether first row is a header (non-numeric values)
+    first = pd.read_csv(forcing_path, sep=r"\s+", nrows=1, header=None).iloc[0]
+    has_header = pd.to_numeric(first, errors="coerce").isna().any()
+
+    if has_header:
+        df = pd.read_csv(forcing_path, sep=r"\s+", header=0)
+        missing = [c for c in X_headers if c not in df.columns]
+        if missing:
+            raise ValueError(f"Forcing file header is missing required columns: {missing}")
+    else:
+        df = pd.read_csv(forcing_path, sep=r"\s+", header=None)
+        if df.shape[1] < 5:
+            raise ValueError(f"Unexpected forcing file shape {df.shape} for {forcing_path}")
+        df.columns = X_headers + [f"c{i}" for i in range(df.shape[1] - 5)]
+
     X_pred = df[X_headers].copy()
 
     ind_co2 = X_headers.index('co2')
