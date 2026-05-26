@@ -223,4 +223,173 @@ class TrainingGenerator:
         joblib.dump(artifact, artifact_path)
         print(f"[INFO] Saved fitted model artifact to {artifact_path}")
 
+        if self.diag_dir is not None:
+            self._save_diagnostics(grid, best_model)
+
         return artifact_path
+
+    def _save_diagnostics(self, grid, best_model) -> None:
+        """Save training diagnostics to self.diag_dir / figures/."""
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import xarray as xr
+        from sklearn.decomposition import PCA
+        from paleo_emu.encoders import _VAE
+        from paleo_emu.validation import compute_r2_map
+
+        diag_dir = Path(self.diag_dir)
+        fig_dir = diag_dir / "figures"
+        diag_dir.mkdir(parents=True, exist_ok=True)
+        fig_dir.mkdir(parents=True, exist_ok=True)
+
+        # --- CV results ---
+        pd.DataFrame(grid.cv_results_).to_csv(diag_dir / "cv_results.csv", index=False)
+        print(f"[DIAG] cv_results.csv → {diag_dir}")
+
+        # --- R² map (train-set predictions vs. truth) ---
+        n_lat, n_lon = len(self.lat_array), len(self.lon_array)
+        Y_pred_flat = best_model.predict(self.X_train)
+        Y_pred_3d = Y_pred_flat.reshape(-1, n_lat, n_lon)
+        Y_true_3d = np.asarray(self.Y_train).reshape(-1, n_lat, n_lon)
+        r2_map = compute_r2_map(Y_true_3d, Y_pred_3d, self.lat_array, self.lon_array)
+
+        xr.DataArray(
+            r2_map, dims=["latitude", "longitude"],
+            coords={"latitude": self.lat_array, "longitude": self.lon_array},
+            name="r2", attrs={"long_name": "R² score (training set)", "units": "1"},
+        ).to_netcdf(diag_dir / "r2_map.nc")
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        im = ax.pcolormesh(self.lon_array, self.lat_array, r2_map,
+                           vmin=0, vmax=1, cmap="RdYlGn")
+        plt.colorbar(im, ax=ax, label="R²")
+        ax.set_title("R² map (training set)", fontsize=12)
+        ax.set_xlabel("Longitude", fontsize=12)
+        ax.set_ylabel("Latitude", fontsize=12)
+        plt.tight_layout()
+        fig.savefig(fig_dir / "r2_map.png", dpi=300)
+        plt.close(fig)
+        print(f"[DIAG] r2_map.nc + r2_map.png → {diag_dir}")
+
+        # --- encoder-specific diagnostics ---
+        enc = best_model.encoder_model_
+        if isinstance(enc, PCA):
+            var_ratio = enc.explained_variance_ratio_
+            cumulative = np.cumsum(var_ratio)
+            n_comp = len(var_ratio)
+            pd.DataFrame({
+                "component": range(1, n_comp + 1),
+                "explained_variance_ratio": var_ratio,
+                "cumulative_variance_ratio": cumulative,
+            }).to_csv(diag_dir / "pca_variance.csv", index=False)
+
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.bar(range(1, n_comp + 1), var_ratio, label="Individual")
+            ax.plot(range(1, n_comp + 1), cumulative, "r-o", markersize=4,
+                    label="Cumulative")
+            ax.set_xlabel("PC", fontsize=12)
+            ax.set_ylabel("Explained variance ratio", fontsize=12)
+            ax.set_title("PCA explained variance", fontsize=12)
+            ax.legend(fontsize=12)
+            ax.grid(True)
+            plt.tight_layout()
+            fig.savefig(fig_dir / "pca_variance.png", dpi=300)
+            plt.close(fig)
+            print(f"[DIAG] pca_variance.csv + pca_variance.png → {diag_dir}")
+
+        elif isinstance(enc, _VAE):
+            import tensorflow as tf  # noqa: F401 — needed for enc(...)
+            Y_valid = np.asarray(self.Y_train)[:, ~best_model.nan_mask_]
+            eps = 1e-99
+            Y_norm = (Y_valid - best_model.mean_val_) / best_model.std_val_ + eps
+            x_decoded, mean_lat, logvar_lat = enc(Y_norm.astype("float32"))
+
+            recon_err = np.mean((Y_norm - x_decoded.numpy()) ** 2, axis=1)
+            xr.DataArray(
+                recon_err, dims=["sample"],
+                name="reconstruction_mse",
+                attrs={"long_name": "Per-sample VAE reconstruction MSE"},
+            ).to_netcdf(diag_dir / "vae_reconstruction_error.nc")
+
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.plot(recon_err, "b-")
+            ax.set_xlabel("Sample", fontsize=12)
+            ax.set_ylabel("MSE", fontsize=12)
+            ax.set_title("VAE reconstruction error (training set)", fontsize=12)
+            ax.grid(True)
+            plt.tight_layout()
+            fig.savefig(fig_dir / "vae_reconstruction_error.png", dpi=300)
+            plt.close(fig)
+
+            mean_np = mean_lat.numpy()
+            logvar_np = logvar_lat.numpy()
+            kl_per_dim = 0.5 * np.mean(
+                np.exp(logvar_np) + mean_np ** 2 - 1 - logvar_np, axis=0
+            )
+            pd.DataFrame({
+                "latent_dim": range(len(kl_per_dim)),
+                "kl_divergence": kl_per_dim,
+                "mean_of_mean": np.mean(mean_np, axis=0),
+                "std_of_mean": np.std(mean_np, axis=0),
+                "mean_of_logvar": np.mean(logvar_np, axis=0),
+            }).to_csv(diag_dir / "vae_latent_stats.csv", index=False)
+            print(f"[DIAG] VAE diagnostics → {diag_dir}")
+
+        # --- regressor-specific diagnostics ---
+        inner_reg = best_model.estimator_["regressor"]
+        if isinstance(inner_reg, GPMultiOutputWithStd):
+            rows = []
+            for i, est in enumerate(inner_reg.estimators_):
+                row: dict = {"latent_component": i}
+                try:
+                    row["log_marginal_likelihood"] = est.log_marginal_likelihood_value_
+                    kernel = est.kernel_
+                    row["noise_level"] = kernel.k2.noise_level
+                    ls = kernel.k1.length_scale
+                    if hasattr(ls, "__len__"):
+                        for fname, lsv in zip(self.cfg.X_column_names, ls):
+                            row[f"length_scale_{fname}"] = lsv
+                    else:
+                        row["length_scale"] = float(ls)
+                except AttributeError:
+                    pass
+                rows.append(row)
+            pd.DataFrame(rows).to_csv(diag_dir / "gp_kernel_params.csv", index=False)
+            print(f"[DIAG] gp_kernel_params.csv → {diag_dir}")
+
+        else:
+            try:
+                importances = np.array([
+                    est.feature_importances_ for est in inner_reg.estimators_
+                ])
+                mean_imp = np.mean(importances, axis=0)
+                feature_names = list(self.cfg.X_column_names)
+                df_imp = pd.DataFrame({
+                    "feature": feature_names,
+                    "mean_importance": mean_imp,
+                })
+                for i, imp_row in enumerate(importances):
+                    df_imp[f"component_{i}"] = imp_row
+                df_imp.sort_values("mean_importance", ascending=False).to_csv(
+                    diag_dir / "xgb_feature_importance.csv", index=False
+                )
+
+                sorted_idx = np.argsort(mean_imp)
+                fig, ax = plt.subplots(
+                    figsize=(8, max(4, len(feature_names) * 0.5))
+                )
+                ax.barh(
+                    [feature_names[j] for j in sorted_idx],
+                    mean_imp[sorted_idx],
+                )
+                ax.set_xlabel("Mean feature importance", fontsize=12)
+                ax.set_title(
+                    "XGBoost feature importance\n(mean across latent components)",
+                    fontsize=12,
+                )
+                plt.tight_layout()
+                fig.savefig(fig_dir / "xgb_feature_importance.png", dpi=300)
+                plt.close(fig)
+                print(f"[DIAG] xgb_feature_importance.csv + .png → {diag_dir}")
+            except AttributeError:
+                pass
