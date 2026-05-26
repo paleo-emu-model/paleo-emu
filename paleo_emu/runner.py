@@ -128,11 +128,21 @@ class PaleoEmuRunner:
         self.cfg = load_config(str(self.cfg_path))
 
     # ------------------------------------------------------------------
-    def train(self) -> Path:
-        """Load training data, fit the model, and save the artifact."""
+    def train(self, diag: bool = False) -> Path:
+        """Load training data, fit the model, and save the artifact.
+
+        Parameters
+        ----------
+        diag : bool, default=False
+            If True, save diagnostic outputs (CV results, R² map, encoder
+            and regressor summaries) to ``<cfg_dir>/diagnose/`` with figures
+            in the ``figures/`` sub-folder.
+        """
         X, Y, var_name, _, lat_array, lon_array, _, var_attrs = load_training_data(self.cfg)
+        diag_dir = self.cfg_path.parent / "diagnose" if diag else None
         training      = TrainingGenerator(self.cfg, X, Y, lat_array, lon_array,
-                                          var_name=var_name, var_attrs=var_attrs)
+                                          var_name=var_name, var_attrs=var_attrs,
+                                          diag_dir=diag_dir)
         artifact_path = Path(training._run_training())
         print(f"[TRAIN] artifact saved → {artifact_path}")
         return artifact_path
