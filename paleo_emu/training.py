@@ -139,7 +139,7 @@ class TrainingGenerator:
         else:
             return MultiOutputRegressor(base_regressor)
     # ----------------- main training -----------------
-    def run_training(self) -> str:
+    def _run_training(self) -> str:
         """Run training and export results as a joblib file.
 
         Returns

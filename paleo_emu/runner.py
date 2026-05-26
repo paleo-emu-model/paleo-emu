@@ -133,7 +133,7 @@ class PaleoEmuRunner:
         X, Y, var_name, _, lat_array, lon_array, _, var_attrs = load_training_data(self.cfg)
         training      = TrainingGenerator(self.cfg, X, Y, lat_array, lon_array,
                                           var_name=var_name, var_attrs=var_attrs)
-        artifact_path = Path(training.run_training())
+        artifact_path = Path(training._run_training())
         print(f"[TRAIN] artifact saved → {artifact_path}")
         return artifact_path
 

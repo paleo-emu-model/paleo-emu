@@ -52,7 +52,7 @@ class TestTraining(unittest.TestCase):
             lon_array,
             output_dir=str(self.repo_root / "tests"), 
         )
-        artifact_path = training.run_training()
+        artifact_path = training._run_training()
         self.assertTrue(os.path.exists(artifact_path))
 
         # Return everything needed for checks
