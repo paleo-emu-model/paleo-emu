@@ -26,5 +26,7 @@ if RUN_TRAINING:
 runner.predict("SSP585")
 
 # --- plot (using module-level singleton) ---
-plotter.map("SSP585", cfg="example_PCA_GP.yml", zonal_mean=True,save_name="ssp585_map", fmt="png",save_dir="examples/figures/")
+plotter.map("SSP585", cfg="example_PCA_GP.yml",time=2, zonal_mean=True,save_name="ssp585_map_3ka", fmt="png",save_dir="examples/figures/")
 plotter.timeseries("SSP585", cfg="example_PCA_GP.yml")
+plotter.uncertainty_map("SSP585", cfg="example_PCA_GP.yml")
+plotter.mapgif("SSP585", cfg="example_PCA_GP.yml", save_name="ssp585_map", save_dir="examples/figures/")
