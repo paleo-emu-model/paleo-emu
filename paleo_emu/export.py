@@ -200,8 +200,8 @@ def save_prediction(Y_pred, Y_var, lat_array, lon_array, output_dir, file_name="
     ds.attrs["source"]       = f"paleo-emu ML emulator ({_homepage})"
     if _PKG_META.get("description"):
         ds.attrs["title"]        = _PKG_META["description"]
-    if _PKG_META.get("creator_name"):
-        ds.attrs["creator_name"] = _PKG_META["creator_name"]
+    if _PKG_META.get("authors"):
+        ds.attrs["authors"] = _PKG_META["authors"]
 
     save_path = output_dir / f"{file_name}.nc"
     ds.to_netcdf(save_path, engine="h5netcdf")
