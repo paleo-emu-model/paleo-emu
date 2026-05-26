@@ -62,6 +62,8 @@ class TrainingGenerator:
         lat_array,
         lon_array,
         output_dir: str = ".",
+        var_name: str | None = None,
+        var_attrs: dict | None = None,
     ):
         self.cfg: PaleoEmuConfig = model_configuration
         self.X_train = X_train
@@ -69,6 +71,8 @@ class TrainingGenerator:
         self.lat_array = lat_array
         self.lon_array = lon_array
         self.output_dir = output_dir
+        self.var_name = var_name
+        self.var_attrs = var_attrs or {}
 
     # ----------------- helpers -----------------
     def _build_kernel_candidates(self):
@@ -202,6 +206,8 @@ class TrainingGenerator:
             "mean_val": best_model.mean_val_,
             "std_val": best_model.std_val_,
             "nan_mask": best_model.nan_mask_,
+            "var_name": self.var_name,
+            "var_attrs": self.var_attrs,
         }
         artifact_name = (
             self.cfg.artifact_name
