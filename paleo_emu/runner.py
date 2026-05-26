@@ -130,8 +130,9 @@ class PaleoEmuRunner:
     # ------------------------------------------------------------------
     def train(self) -> Path:
         """Load training data, fit the model, and save the artifact."""
-        X, Y, _, _, lat_array, lon_array, _ = load_training_data(self.cfg)
-        training      = TrainingGenerator(self.cfg, X, Y, lat_array, lon_array)
+        X, Y, var_name, _, lat_array, lon_array, _, var_attrs = load_training_data(self.cfg)
+        training      = TrainingGenerator(self.cfg, X, Y, lat_array, lon_array,
+                                          var_name=var_name, var_attrs=var_attrs)
         artifact_path = Path(training.run_training())
         print(f"[TRAIN] artifact saved → {artifact_path}")
         return artifact_path
@@ -165,6 +166,8 @@ class PaleoEmuRunner:
         model     = artifact["model"]
         lat_array = artifact["lat_array"]
         lon_array = artifact["lon_array"]
+        var_name  = artifact.get("var_name")
+        var_attrs = artifact.get("var_attrs", {})
         n_lat, n_lon = len(lat_array), len(lon_array)
 
         for scen in scenario_list:
@@ -199,7 +202,8 @@ class PaleoEmuRunner:
                 fname += "_prediction"
 
                 save_prediction(Y_pred_3d, Y_var_3d, lat_array, lon_array,
-                                output_dir=str(out_dir), file_name=fname)
+                                output_dir=str(out_dir), file_name=fname,
+                                var_name=var_name, var_attrs=var_attrs)
                 print(f"[PREDICT] {scen}"
                       + (f" {sweep_vals}" if sweep_vals else "")
                       + f" → {out_dir / fname}.nc")
