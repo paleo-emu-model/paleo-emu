@@ -128,11 +128,12 @@ class PaleoEmuPlotter:
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
         _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
-        frame     = _sel_time_avg(ds["prediction"].values, time)
+        pred_var  = _get_pred_var(ds)
+        frame     = _sel_time_avg(ds[pred_var].values, time)
         lat       = ds["latitude"].values
         lon       = ds["longitude"].values
-        long_name = ds["prediction"].attrs.get("long_name", var or "prediction")
-        units     = ds["prediction"].attrs.get("units", "")
+        long_name = ds[pred_var].attrs.get("long_name", var or pred_var)
+        units     = ds[pred_var].attrs.get("units", "")
 
         if region is not None:
             frame, lat, lon = _crop(frame, lat, lon, region)
@@ -193,11 +194,12 @@ class PaleoEmuPlotter:
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
         _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
-        pred      = ds["prediction"].values
+        pred_var  = _get_pred_var(ds)
+        pred      = ds[pred_var].values
         lat       = ds["latitude"].values
         lon       = ds["longitude"].values
-        long_name = ds["prediction"].attrs.get("long_name", var or "prediction")
-        units     = ds["prediction"].attrs.get("units", "")
+        long_name = ds[pred_var].attrs.get("long_name", var or pred_var)
+        units     = ds[pred_var].attrs.get("units", "")
 
         if region is not None:
             pred, lat, lon = _crop(pred, lat, lon, region)
@@ -267,11 +269,12 @@ class PaleoEmuPlotter:
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
         _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
+        pred_var  = _get_pred_var(ds)
         frame     = np.sqrt(_sel_time_avg(ds["variance"].values, time))
         lat       = ds["latitude"].values
         lon       = ds["longitude"].values
-        long_name = ds["prediction"].attrs.get("long_name", var or "prediction")
-        units     = ds["prediction"].attrs.get("units", "")
+        long_name = ds[pred_var].attrs.get("long_name", var or pred_var)
+        units     = ds[pred_var].attrs.get("units", "")
 
         if region is not None:
             frame, lat, lon = _crop(frame, lat, lon, region)
@@ -328,10 +331,11 @@ class PaleoEmuPlotter:
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
         _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
-        frame     = _sel_time_avg(ds["prediction"].values, time)
+        pred_var  = _get_pred_var(ds)
+        frame     = _sel_time_avg(ds[pred_var].values, time)
         lat       = ds["latitude"].values
-        long_name = ds["prediction"].attrs.get("long_name", var or "prediction")
-        units     = ds["prediction"].attrs.get("units", "")
+        long_name = ds[pred_var].attrs.get("long_name", var or pred_var)
+        units     = ds[pred_var].attrs.get("units", "")
 
         t_label = _time_label(time)
         zonal = np.nanmean(frame, axis=1)
@@ -396,12 +400,13 @@ class PaleoEmuPlotter:
         _validate_var(ref_scenario, var, cfg_obj)
         ds_s   = self._load(scenario,     var, filepath,     cfg_obj, cfg_path)
         ds_r   = self._load(ref_scenario, var, ref_filepath, cfg_obj, cfg_path)
-        s_fr   = _sel_time_avg(ds_s["prediction"].values, time)
-        r_fr   = _sel_time_avg(ds_r["prediction"].values, time)
+        pred_var  = _get_pred_var(ds_s)
+        s_fr   = _sel_time_avg(ds_s[pred_var].values, time)
+        r_fr   = _sel_time_avg(ds_r[pred_var].values, time)
         lat    = ds_s["latitude"].values
         lon    = ds_s["longitude"].values
-        long_name = ds_s["prediction"].attrs.get("long_name", var or "prediction")
-        units     = ds_s["prediction"].attrs.get("units", "")
+        long_name = ds_s[pred_var].attrs.get("long_name", var or pred_var)
+        units     = ds_s[pred_var].attrs.get("units", "")
 
         diff = s_fr - r_fr
 
@@ -477,11 +482,12 @@ class PaleoEmuPlotter:
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
         _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
-        pred      = ds["prediction"].values
+        pred_var  = _get_pred_var(ds)
+        pred      = ds[pred_var].values
         lat       = ds["latitude"].values
         lon       = ds["longitude"].values
-        long_name = ds["prediction"].attrs.get("long_name", var or "prediction")
-        units     = ds["prediction"].attrs.get("units", "")
+        long_name = ds[pred_var].attrs.get("long_name", var or pred_var)
+        units     = ds[pred_var].attrs.get("units", "")
 
         if isinstance(time, int):
             t_idx = [time]
@@ -655,6 +661,14 @@ class PaleoEmuPlotter:
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+def _get_pred_var(ds):
+    """Return the prediction variable name — first data var that is not 'variance'."""
+    candidates = [v for v in ds.data_vars if v != "variance"]
+    if not candidates:
+        raise KeyError("No prediction variable found in dataset.")
+    return candidates[0]
+
 
 def _load_cfg(cfg_path, caller_dir):
     p = Path(cfg_path)
