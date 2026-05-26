@@ -80,6 +80,12 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         self.model_config = model_config
         self.return_encoded = return_encoded
 
+    # ----------------- helpers -----------------
+    def _assert_fitted(self):
+        if (getattr(self, "estimator_", None) is None
+                or getattr(self, "encoder_model_", None) is None):
+            raise RuntimeError("EncodedTargetRegressor is not fitted yet.")
+
     # ----------------- core sklearn API -----------------
     def fit(self, X, y):
         """Fit encoder (PCA or VAE) on y, then fit base_estimator on encoded y."""
@@ -129,13 +135,7 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
         This method only returns predictions (standard sklearn API).
         To get uncertainty estimates, use predict_with_variance() instead.
         """
-        check_is_fitted = getattr(
-            self, "estimator_", None
-        ) is not None and getattr(self, "encoder_model_", None) is not None
-        if not check_is_fitted:
-            raise RuntimeError("EncodedTargetRegressor is not fitted yet.")
-
-        
+        self._assert_fitted()
         y_enc_pred = self.estimator_.predict(X)
 
         y_enc_pred = np.asarray(y_enc_pred)
@@ -162,12 +162,7 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
             Standard deviation in original y space (only for GP models).
             For non-GP models, returns None.
         """
-        check_is_fitted = getattr(
-            self, "estimator_", None
-        ) is not None and getattr(self, "encoder_model_", None) is not None
-        if not check_is_fitted:
-            raise RuntimeError("EncodedTargetRegressor is not fitted yet.")
-
+        self._assert_fitted()
         # Try to get predictions and std from base estimator
         try:
             # This works for both direct GP and GPMultiOutputWithStd wrapper
@@ -213,7 +208,6 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
 
         return y_pred, y_std_decoded
 
-    # ----------------- helpers -----------------
     def _reconstruct(self, y_valid: np.ndarray) -> np.ndarray:
         """Expand valid-column predictions back to the full grid, with NaN at masked locations."""
         if not np.any(self.nan_mask_):
