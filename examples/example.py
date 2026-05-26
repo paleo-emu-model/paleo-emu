@@ -1,22 +1,30 @@
 """
-Example: train a PCA+GP emulator and predict under scenario forcing.
+Train a PCA+GP emulator, predict under scenario forcing, and plot.
 
-All scenarios are defined in example_PCA_GP.yml.
+Config: example_PCA_GP.yml
 
-Usage:
-  runner.predict()                                           # all scenarios
-  runner.predict("SSP585")                                   # case 1: single file
-  runner.predict("past800ka_ens")                            # case 2: all 90 members
-  runner.predict("past800ka_ens", member="1-10")             # case 2: members 1–10
-  runner.predict("past800ka_var")                            # case 3: all vars
-  runner.predict("past800ka_var", var="sst")                 # case 3: one var
-  runner.predict("past800ka_var", var=["sst", "precip"])     # case 3: subset
+For the full API reference run in Python:
+    from paleo_emu import PaleoEmuPlotter
+    help(PaleoEmuPlotter)        # overview and usage styles
+    help(PaleoEmuPlotter.map)    # spatial map — all parameters + examples
+    help(PaleoEmuPlotter.timeseries)
+    help(PaleoEmuPlotter.uncertainty_map)
+    help(PaleoEmuPlotter.zonal_mean)
+    help(PaleoEmuPlotter.delta_map)
+    help(PaleoEmuPlotter.mapgif)
 """
 
-from paleo_emu import PaleoEmuRunner
+from paleo_emu import PaleoEmuRunner, plotter
 
+# --- train and predict ---
 runner = PaleoEmuRunner("example_PCA_GP.yml")
 
-runner.train()
+RUN_TRAINING = False   # set to True to retrain from scratch
+if RUN_TRAINING:
+    runner.train()
 
 runner.predict("SSP585")
+
+# --- plot (using module-level singleton) ---
+plotter.map("SSP585", cfg="example_PCA_GP.yml", zonal_mean=True,save_name="ssp585_map", fmt="png",save_dir="examples/figures/")
+plotter.timeseries("SSP585", cfg="example_PCA_GP.yml")
