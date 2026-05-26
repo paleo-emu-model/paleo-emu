@@ -1,19 +1,20 @@
 import os
+import tempfile
 from pathlib import Path
 import unittest
-import warnings
 
 import joblib
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
+import xarray as xr
 
 from paleo_emu.training import TrainingGenerator
 from paleo_emu.config import load_config
 from paleo_emu.load import load_training_data
 from paleo_emu.load import load_forcing_data
-from paleo_emu.regressor import EncodedTargetRegressor  
-import xarray as xr
+from paleo_emu.regressor import EncodedTargetRegressor
+from paleo_emu.export import save_prediction
 
 class TestTraining(unittest.TestCase):
     def setUp(self):
@@ -33,7 +34,7 @@ class TestTraining(unittest.TestCase):
         cfg = load_config(str(model_cfg_path))
 
         # Load full training data from disk
-        X_full, Y_full, _, _, lat_array, lon_array, _ = load_training_data(cfg)
+        X_full, Y_full, _, _, lat_array, lon_array, _, _ = load_training_data(cfg)
 
         # 80/20 train–test split for performance evaluation
         X_train, X_test, Y_train, Y_test = train_test_split(
@@ -188,6 +189,66 @@ class TestTraining(unittest.TestCase):
         Y_pred, Y_std = self._run_prediction_with_cfg("test_VAE_XGB.yml", scenario="800ka")
         self._check_artifact_and_predictions(artifact_path, X_full, X_test, Y_test,
                                               r2_threshold=-1.0, mean_delta=50.0)
+
+
+    def test_save_prediction_cf_attrs(self):
+        """save_prediction output is CF-1.8 compliant."""
+        rng = np.random.default_rng(0)
+        lat = np.linspace(-90, 90, 4)
+        lon = np.linspace(0, 360, 6)
+        Y_pred = rng.random((3, 4, 6))
+        Y_var  = rng.random((3, 4, 6))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            save_prediction(
+                Y_pred, Y_var, lat, lon, tmp,
+                file_name="cf_test",
+                var_name="tos",
+                var_attrs={"long_name": "sea surface temperature", "units": "degC",
+                           "standard_name": "sea_surface_temperature"},
+            )
+            ds = xr.open_dataset(Path(tmp) / "cf_test.nc")
+
+            # Convention flag
+            self.assertEqual(ds.attrs.get("Conventions"), "CF-1.8")
+
+            # Coordinate CF attributes
+            self.assertEqual(ds["latitude"].attrs.get("units"), "degrees_north")
+            self.assertEqual(ds["longitude"].attrs.get("units"), "degrees_east")
+            self.assertEqual(ds["latitude"].attrs.get("axis"), "Y")
+            self.assertEqual(ds["longitude"].attrs.get("axis"), "X")
+            self.assertEqual(ds["time"].attrs.get("axis"), "T")
+
+            # Variable attributes pulled from var_attrs
+            self.assertEqual(ds["tos"].attrs.get("standard_name"), "sea_surface_temperature")
+            self.assertEqual(ds["tos"].attrs.get("units"), "degC")
+            self.assertEqual(ds["tos"].attrs.get("long_name"), "sea surface temperature")
+
+            # Variance attributes
+            self.assertIn("variance of", ds["variance"].attrs.get("long_name", ""))
+            self.assertIn("degC", ds["variance"].attrs.get("units", ""))
+
+            ds.close()
+
+    def test_save_prediction_cf_attrs_no_training_attrs(self):
+        """save_prediction falls back gracefully when training data has no CF attrs."""
+        rng = np.random.default_rng(1)
+        lat = np.array([-45.0, 0.0, 45.0])
+        lon = np.array([0.0, 90.0, 180.0, 270.0])
+        Y_pred = rng.random((2, 3, 4))
+        Y_var  = rng.random((2, 3, 4))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # No var_name or var_attrs → pure defaults
+            save_prediction(Y_pred, Y_var, lat, lon, tmp, file_name="cf_defaults")
+            ds = xr.open_dataset(Path(tmp) / "cf_defaults.nc")
+
+            self.assertEqual(ds.attrs.get("Conventions"), "CF-1.8")
+            self.assertIn("prediction", ds.data_vars)
+            self.assertEqual(ds["latitude"].attrs.get("units"), "degrees_north")
+            self.assertEqual(ds["longitude"].attrs.get("units"), "degrees_east")
+
+            ds.close()
 
 
 if __name__ == "__main__":
