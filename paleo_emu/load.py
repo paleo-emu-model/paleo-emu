@@ -172,7 +172,9 @@ def load_training_data(model_configuration: PaleoEmuConfig):
     lat_array = ds[lat_name].values
     lon_array = ds[lon_name].values
 
-    return X, Y_flat, var_name, (Y.shape[1], Y.shape[2]), lat_array, lon_array, nan_mask
+    var_attrs = dict(ds[var_name].attrs)
+
+    return X, Y_flat, var_name, (Y.shape[1], Y.shape[2]), lat_array, lon_array, nan_mask, var_attrs
 
 def load_forcing_data(model_configuration: PaleoEmuConfig, scenario=None, forcing_file=None):
     """
