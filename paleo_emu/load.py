@@ -174,22 +174,36 @@ def load_training_data(model_configuration: PaleoEmuConfig):
 
     return X, Y_flat, var_name, (Y.shape[1], Y.shape[2]), lat_array, lon_array, nan_mask
 
-def load_forcing_data(model_configuration: PaleoEmuConfig, scenario="rcp85.1"):
+def load_forcing_data(model_configuration: PaleoEmuConfig, scenario=None, forcing_file=None):
     """
-    model_cfg can be inside emulator.yaml forcing_data section.
-    Expected keys: file_path, forcing_input
+    Load forcing data for prediction.
+
+    Parameters
+    ----------
+    scenario : str, optional
+        Key in ``forcing_data`` section of the config.  Required unless
+        ``forcing_file`` is given directly.
+    forcing_file : str or Path, optional
+        Filename relative to ``forcing_data_path``.  When provided,
+        ``scenario`` is ignored and this file is loaded directly.
+        Used internally by PaleoEmuRunner for pattern-based sweeps.
     """
 
     base = model_configuration.forcing_data_path
-    scenario_cfg = model_configuration.forcing_data.get(scenario)
-    if scenario_cfg is None:
-        raise KeyError(f"Scenario '{scenario}' not found in config. "
-                       f"Available: {list(model_configuration.forcing_data.keys())}")
-    forcing_input = scenario_cfg.get("forcing_input")
-    if not forcing_input:
-        raise KeyError("forcing config must include 'forcing_input'")
 
-    forcing_path = base / forcing_input
+    if forcing_file is not None:
+        forcing_path = base / forcing_file
+    else:
+        if scenario is None:
+            raise ValueError("Provide either 'scenario' or 'forcing_file'.")
+        scenario_cfg = model_configuration.forcing_data.get(scenario)
+        if scenario_cfg is None:
+            raise KeyError(f"Scenario '{scenario}' not found in config. "
+                           f"Available: {list(model_configuration.forcing_data.keys())}")
+        forcing_input = scenario_cfg.get("forcing_input")
+        if not forcing_input:
+            raise KeyError("forcing config must include 'forcing_input'")
+        forcing_path = base / forcing_input
     if not forcing_path.exists():
         raise FileNotFoundError(f"forcing file not found: {forcing_path}")
 
