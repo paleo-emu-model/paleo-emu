@@ -213,7 +213,7 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
 
         return y_pred, y_std_decoded
 
-    def predict_encoded(self, X):
+    def _predict_encoded(self, X):
         """Return predictions in latent (encoded) space."""
         check_is_fitted = getattr(
             self, "estimator_", None
