@@ -213,17 +213,6 @@ class EncodedTargetRegressor(BaseEstimator, RegressorMixin):
 
         return y_pred, y_std_decoded
 
-    def _predict_encoded(self, X):
-        """Return predictions in latent (encoded) space."""
-        check_is_fitted = getattr(
-            self, "estimator_", None
-        ) is not None and getattr(self, "encoder_model_", None) is not None
-        if not check_is_fitted:
-            raise RuntimeError("EncodedTargetRegressor is not fitted yet.")
-
-        y_enc_pred = self.estimator_.predict(X)
-        return np.asarray(y_enc_pred)
-    
     # ----------------- helpers -----------------
     def _reconstruct(self, y_valid: np.ndarray) -> np.ndarray:
         """Expand valid-column predictions back to the full grid, with NaN at masked locations."""
