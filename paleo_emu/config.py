@@ -4,10 +4,7 @@ from pydantic import BaseModel, field_validator, ValidationError, model_validato
 from pathlib import Path
 import numpy as np
 
-try:
-    from typing import Literal
-except ImportError:  # pragma: no cover
-    from typing_extensions import Literal
+from typing import Literal
 
 from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel
 
