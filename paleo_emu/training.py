@@ -233,6 +233,8 @@ class TrainingGenerator:
         import pandas as pd
         import matplotlib.pyplot as plt
         import xarray as xr
+        import cartopy.crs as ccrs
+        import cartopy.util as cutil
         from sklearn.decomposition import PCA
         from paleo_emu.encoders import _VAE
         from paleo_emu.validation import compute_r2_map
@@ -259,17 +261,27 @@ class TrainingGenerator:
             name="r2", attrs={"long_name": "R² score (training set)", "units": "1"},
         ).to_netcdf(diag_dir / "r2_map.nc")
 
-        fig, ax = plt.subplots(figsize=(10, 5))
-        im = ax.pcolormesh(self.lon_array, self.lat_array, r2_map,
-                           vmin=0, vmax=1, cmap="RdYlGn")
-        plt.colorbar(im, ax=ax, label="R²")
+        lon = np.array(self.lon_array)
+        lat = np.array(self.lat_array)
+        if lon.size > 1 and np.isclose(lon[-1], 360.0, atol=1.0) and np.isclose(lon[0], 0.0, atol=1.0):
+            r2_map = r2_map[..., :-1]
+            lon = lon[:-1]
+        r2_cyc, lon_cyc = cutil.add_cyclic_point(r2_map, coord=lon)
+        Lon, Lat = np.meshgrid(lon_cyc, lat)
+
+        fig, ax = plt.subplots(figsize=(10, 5),
+                               subplot_kw={"projection": ccrs.PlateCarree()})
+        im = ax.pcolormesh(Lon, Lat, r2_cyc, vmin=0.8, vmax=1, cmap="RdYlGn",
+                           shading="auto", transform=ccrs.PlateCarree())
+        ax.set_global()
+        ax.coastlines(linewidth=0.6)
+        plt.colorbar(im, ax=ax, label="R²", shrink=0.7)
+        
         ax.set_title("R² map (training set)", fontsize=12)
-        ax.set_xlabel("Longitude", fontsize=12)
-        ax.set_ylabel("Latitude", fontsize=12)
         plt.tight_layout()
         fig.savefig(fig_dir / "r2_map.png", dpi=300)
         plt.close(fig)
-        print(f"[DIAG] r2_map.nc + r2_map.png → {diag_dir}")
+        print(f"[DIAG] r2_map.nc + r2_map.png → {diag_dir}/figures/")
 
         # --- encoder-specific diagnostics ---
         enc = best_model.encoder_model_
@@ -295,7 +307,7 @@ class TrainingGenerator:
             plt.tight_layout()
             fig.savefig(fig_dir / "pca_variance.png", dpi=300)
             plt.close(fig)
-            print(f"[DIAG] pca_variance.csv + pca_variance.png → {diag_dir}")
+            print(f"[DIAG] pca_variance.csv + pca_variance.png → {diag_dir}/figures/")
 
         elif isinstance(enc, _VAE):
             import tensorflow as tf  # noqa: F401 — needed for enc(...)

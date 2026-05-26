@@ -19,9 +19,9 @@ from paleo_emu import PaleoEmuRunner, plotter
 # --- train and predict ---
 runner = PaleoEmuRunner("example_PCA_GP.yml")
 
-RUN_TRAINING = False   # set to True to retrain from scratch
+RUN_TRAINING = True   # set to True to retrain from scratch
 if RUN_TRAINING:
-    runner.train()
+    runner.train(diag=True)
 
 runner.predict("SSP585")
 
