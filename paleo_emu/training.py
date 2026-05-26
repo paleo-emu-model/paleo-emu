@@ -16,8 +16,10 @@ The joblib artifact will contain:
 
 import os
 import warnings
+from pathlib import Path
 
 import joblib
+import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.multioutput import MultiOutputRegressor
@@ -64,6 +66,7 @@ class TrainingGenerator:
         output_dir: str = ".",
         var_name: str | None = None,
         var_attrs: dict | None = None,
+        diag_dir: Path | None = None,
     ):
         self.cfg: PaleoEmuConfig = model_configuration
         self.X_train = X_train
@@ -73,6 +76,7 @@ class TrainingGenerator:
         self.output_dir = output_dir
         self.var_name = var_name
         self.var_attrs = var_attrs or {}
+        self.diag_dir = diag_dir
 
     # ----------------- helpers -----------------
     def _build_kernel_candidates(self):
