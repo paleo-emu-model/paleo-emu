@@ -4,13 +4,12 @@ High-level runner for training and prediction.
 
 import inspect
 import itertools
-import re
 from pathlib import Path
 
 import joblib
 import numpy as np
 
-from paleo_emu.config import load_config
+from paleo_emu.config import NumberedSweep, PatternForcingConfig, SingleForcingConfig, load_config
 from paleo_emu.export import save_prediction
 from paleo_emu.load import load_forcing_data, load_training_data
 from paleo_emu.training import TrainingGenerator
@@ -20,30 +19,15 @@ from paleo_emu.training import TrainingGenerator
 # Sweep helpers
 # ---------------------------------------------------------------------------
 
-def _parse_sweep_values(v) -> list[str]:
-    """
-    Parse a YAML sweep value into a list of strings.
-
-    Supported forms:
-      "1-90"            → ["001", "002", ..., "090"]  (zero-padded to max width)
-      [1, 2, 5]         → ["1", "2", "5"]
-      ["sst", "precip"] → ["sst", "precip"]
-      "SSP585"          → ["SSP585"]
-    """
+def _format_sweep_filter_values(v) -> list[str]:
+    """Parse runtime sweep filters into strings for comparison."""
+    if isinstance(v, NumberedSweep):
+        return v.values()
+    if isinstance(v, dict):
+        return NumberedSweep(**v).values()
     if isinstance(v, list):
-        values = [str(x) for x in v]
-    else:
-        m = re.match(r'^(\d+)-(\d+)$', str(v).strip())
-        if m:
-            start, end = int(m.group(1)), int(m.group(2))
-            width = len(str(end))
-            return [str(i).zfill(width) for i in range(start, end + 1)]
-        return [str(v)]
-
-    if all(s.isdigit() for s in values):
-        width = max(len(s) for s in values)
-        values = [s.zfill(width) for s in values]
-    return values
+        return [str(x) for x in v]
+    return [str(v)]
 
 
 def _norm(s: str) -> str:
@@ -52,45 +36,33 @@ def _norm(s: str) -> str:
 
 
 def _matches_filter(sweep_vals: dict, sweep_overrides: dict) -> bool:
-    """Return True if sweep_vals satisfies all constraints in sweep_overrides."""
+    """Return True if sweep_vals satisfies all runtime sweep filters."""
     for k, v in sweep_overrides.items():
-        allowed = {_norm(x) for x in _parse_sweep_values(v)}
+        allowed = {_norm(x) for x in _format_sweep_filter_values(v)}
         if _norm(str(sweep_vals.get(k, ""))) not in allowed:
             return False
     return True
 
 
-def _expand_scenario(scenario_cfg: dict) -> list[tuple[dict, str]]:
-    """
-    Expand a scenario config into (sweep_dict, forcing_file) pairs.
+def _expand_pattern_config(config: PatternForcingConfig):
+    """Yield (sweep_dict, forcing_file) pairs for a pattern scenario."""
+    sweep_values = config.expanded_sweep_values()
+    keys = list(sweep_values)
+    value_lists = [sweep_values[key] for key in keys]
 
-    Single-file scenario  →  one pair with empty sweep_dict.
-    Pattern scenario      →  one pair per value of the sweep dim.
-    """
-    if "forcing_input" in scenario_cfg:
-        return [({}, scenario_cfg["forcing_input"])]
+    for combo in itertools.product(*value_lists):
+        values = dict(zip(keys, combo))
+        forcing_file = config.forcing_input_pattern.format(**values)
+        yield values, forcing_file
 
-    pattern = scenario_cfg.get("forcing_input_pattern")
-    if pattern is None:
-        raise KeyError(
-            "Scenario config must have either 'forcing_input' or 'forcing_input_pattern'."
-        )
 
-    sweep_dims = {
-        k: _parse_sweep_values(v)
-        for k, v in scenario_cfg.items()
-        if k != "forcing_input_pattern"
-    }
+def _expand_scenario(scenario_cfg: SingleForcingConfig | PatternForcingConfig):
+    """Yield (sweep_dict, forcing_file) pairs for a validated scenario config."""
+    if isinstance(scenario_cfg, SingleForcingConfig):
+        yield {}, scenario_cfg.forcing_input
+        return
 
-    if not sweep_dims:
-        return [({}, pattern)]
-
-    keys   = list(sweep_dims.keys())
-    combos = itertools.product(*[sweep_dims[k] for k in keys])
-    return [
-        (dict(zip(keys, combo)), pattern.format(**dict(zip(keys, combo))))
-        for combo in combos
-    ]
+    yield from _expand_pattern_config(scenario_cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +86,7 @@ class PaleoEmuRunner:
     >>> runner.predict()                                        # all scenarios
     >>> runner.predict("SSP585")                                # single file
     >>> runner.predict("past800ka_ens")                         # all members
-    >>> runner.predict("past800ka_ens", member="1-10")          # members 1–10
+    >>> runner.predict("past800ka_ens", member={"start": 1, "end": 10})  # members 1–10
     >>> runner.predict("past800ka_var")                         # all vars
     >>> runner.predict("past800ka_var", var=["sst", "precip"])  # subset of vars
     """
@@ -152,8 +124,8 @@ class PaleoEmuRunner:
         **sweep_overrides
             Runtime filter for pattern-based scenarios.  The keyword name must
             match a sweep dimension defined in the YAML.  Accepts the same
-            formats as the YAML value (string, list, or range "1-10").
-            Examples: ``member="1-10"``, ``var=["sst", "precip"]``.
+            formats as the YAML value (string, list, or a dict with start/end/width).
+            Examples: ``member={"start": 1, "end": 10}``, ``var=["sst", "precip"]``.
         """
         out_dir = Path(output_dir) if output_dir else self.cfg_path.parent / "outputs"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -178,7 +150,7 @@ class PaleoEmuRunner:
                     f"Available: {list(self.cfg.forcing_data.keys())}"
                 )
 
-            expansions = _expand_scenario(scenario_cfg)
+            expansions = list(_expand_scenario(scenario_cfg))
             if sweep_overrides:
                 expansions = [(sv, ff) for sv, ff in expansions
                               if _matches_filter(sv, sweep_overrides)]
