@@ -8,13 +8,95 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 import xarray as xr
+from pydantic import ValidationError
 
 from paleo_emu.training import TrainingGenerator
-from paleo_emu.config import load_config
+from paleo_emu.config import PaleoEmuConfig, load_config
 from paleo_emu.load import load_training_data
 from paleo_emu.load import load_forcing_data
 from paleo_emu.regressor import EncodedTargetRegressor
 from paleo_emu.export import save_prediction
+
+
+class TestForcingConfigValidation(unittest.TestCase):
+    def _base_config(self, forcing_data):
+        return {
+            "regressor_config": {
+                "kernels": ["RBF"],
+                "n_restarts_optimizer": 0,
+                "alpha": 1e-6,
+                "whitekernel_noise_level": 1e-2,
+                "whitekernel_noise_level_bounds": [1e-5, 1e1],
+            },
+            "cv": {"folds": 2, "n_jobs": 1},
+            "random_state": 29,
+            "model_run_name": "test",
+            "encoder_config": {"encoder_type": "PCA", "n_components": 2},
+            "training_file_path": "examples/training_data/",
+            "X_input_file_name": "training_data_lowmodice_temp_formatted.res",
+            "Y_input_file_name": "training_data_lowmodice_temp_formatted.nc",
+            "X_column_names": ["co2", "obliquity", "esinw", "ecosw", "ice"],
+            "forcing_data_path": "examples/forcing_data/",
+            "forcing_data": forcing_data,
+        }
+
+    def test_single_forcing_config(self):
+        cfg = PaleoEmuConfig(**self._base_config({
+            "SSP585": {
+                "kind": "single",
+                "forcing_input": "Forcings_SSP585_since2000.res",
+            }
+        }))
+
+        self.assertEqual(cfg.forcing_data["SSP585"].kind, "single")
+        self.assertEqual(
+            cfg.forcing_data["SSP585"].forcing_input,
+            "Forcings_SSP585_since2000.res",
+        )
+
+    def test_pattern_numbered_sweep_config(self):
+        cfg = PaleoEmuConfig(**self._base_config({
+            "past800ka_ens": {
+                "kind": "pattern",
+                "forcing_input_pattern": "Forcings_past800ka_sst_member{member}.res",
+                "member": {"start": 1, "end": 3, "width": 3},
+            }
+        }))
+
+        sweep = cfg.forcing_data["past800ka_ens"].expanded_sweep_values()
+        self.assertEqual(sweep["member"], ["001", "002", "003"])
+
+    def test_pattern_list_sweep_config(self):
+        cfg = PaleoEmuConfig(**self._base_config({
+            "past800ka_var": {
+                "kind": "pattern",
+                "forcing_input_pattern": "Forcings_past800ka_{var}_member1.res",
+                "var": ["sst", "precip", "co2"],
+            }
+        }))
+
+        sweep = cfg.forcing_data["past800ka_var"].expanded_sweep_values()
+        self.assertEqual(sweep["var"], ["sst", "precip", "co2"])
+
+    def test_pattern_requires_matching_placeholders(self):
+        with self.assertRaises(ValidationError):
+            PaleoEmuConfig(**self._base_config({
+                "bad": {
+                    "kind": "pattern",
+                    "forcing_input_pattern": "Forcings_past800ka_{var}.res",
+                    "variable": ["sst"],
+                }
+            }))
+
+    def test_pattern_requires_placeholder(self):
+        with self.assertRaises(ValidationError):
+            PaleoEmuConfig(**self._base_config({
+                "bad": {
+                    "kind": "pattern",
+                    "forcing_input_pattern": "Forcings_past800ka_fixed.res",
+                    "member": {"start": 1, "end": 3},
+                }
+            }))
 
 class TestTraining(unittest.TestCase):
     def setUp(self):
