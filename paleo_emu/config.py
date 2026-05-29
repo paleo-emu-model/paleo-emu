@@ -1,6 +1,7 @@
-from typing import Any, List, Optional, Union, Tuple
+from typing import Annotated, List, Optional, Union, Tuple
+import string
 import yaml
-from pydantic import BaseModel, field_validator, ValidationError, model_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ValidationError, model_validator, ConfigDict
 from pathlib import Path
 import numpy as np
 
@@ -177,6 +178,101 @@ class _LearnedEncoderConfig(BaseModel):
         return self
 
 
+
+# -------------------------------------------------------------------
+# Forcing-data configs
+# -------------------------------------------------------------------
+
+class NumberedSweep(BaseModel):
+    start: int
+    end: int
+    step: int = 1
+    width: Optional[int] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_numbered_sweep(self) -> "NumberedSweep":
+        if self.end < self.start:
+            raise ValueError("end must be >= start")
+        if self.step <= 0:
+            raise ValueError("step must be > 0")
+        if self.width is not None and self.width <= 0:
+            raise ValueError("width must be > 0")
+        return self
+
+    def values(self) -> list[str]:
+        values = range(self.start, self.end + 1, self.step)
+        if self.width is None:
+            return [str(v) for v in values]
+        return [str(v).zfill(self.width) for v in values]
+
+
+SweepDimension = Union[List[str], NumberedSweep]
+
+
+class SingleForcingConfig(BaseModel):
+    kind: Literal["single"]
+    forcing_input: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PatternForcingConfig(BaseModel):
+    kind: Literal["pattern"]
+    forcing_input_pattern: str
+    __pydantic_extra__: dict[str, SweepDimension] = Field(init=False)
+
+    model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="after")
+    def validate_pattern_placeholders(self) -> "PatternForcingConfig":
+        sweep_dims = set(self.__pydantic_extra__ or {})
+        placeholders = {
+            field_name
+            for _, field_name, _, _ in string.Formatter().parse(
+                self.forcing_input_pattern
+            )
+            if field_name
+        }
+
+        if not placeholders:
+            raise ValueError(
+                "forcing_input_pattern must contain at least one placeholder, "
+                "for example '{member}' or '{var}'"
+            )
+
+        missing_dims = placeholders - sweep_dims
+        if missing_dims:
+            raise ValueError(
+                "forcing_input_pattern references placeholders with no matching "
+                f"sweep dimensions: {sorted(missing_dims)}"
+            )
+
+        unused_dims = sweep_dims - placeholders
+        if unused_dims:
+            raise ValueError(
+                "Sweep dimensions are defined but not used in "
+                f"forcing_input_pattern: {sorted(unused_dims)}"
+            )
+
+        return self
+
+    def expanded_sweep_values(self) -> dict[str, list[str]]:
+        expanded = {}
+        for name, spec in (self.__pydantic_extra__ or {}).items():
+            if isinstance(spec, NumberedSweep):
+                expanded[name] = spec.values()
+            else:
+                expanded[name] = [str(v) for v in spec]
+        return expanded
+
+
+ForcingConfig = Annotated[
+    Union[SingleForcingConfig, PatternForcingConfig],
+    Field(discriminator="kind"),
+]
+
 # Cross validation config
 class _CVConfig(BaseModel):
     folds: int
@@ -205,7 +301,7 @@ class PaleoEmuConfig(BaseModel):
     Y_input_file_name: Union[str, List[str]]
     X_column_names: List[str]
     forcing_data_path: Path
-    forcing_data: dict[str, dict[str, Any]]
+    forcing_data: dict[str, ForcingConfig]
 
     output_dir: Optional[Path] = None
     artifact_name: Optional[str] = None
