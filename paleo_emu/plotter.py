@@ -79,10 +79,8 @@ class PaleoEmuPlotter:
         scenario : str
             Key in the YAML ``forcing_data`` block (e.g. ``"SSP585"``).
         var : str, optional
-            Must match a ``var`` sweep dimension for this scenario in the
-            YAML config.  Used to locate the NC file via glob
-            ``*{var}*_{scenario}_prediction.nc`` and as the plot label.
-            Omit for single-file scenarios.
+            Sweep value used to locate a pattern-scenario prediction file and
+            as the plot label. Omit for single-file scenarios.
         time : None, int, list, range, or slice, default None
             Time selection — see Notes.
         region : list of float, optional
@@ -126,7 +124,6 @@ class PaleoEmuPlotter:
         >>> p.map("past800ka_var", var="sst", time=[0, 1, 2, 3])
         """
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
-        _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
         frame     = _sel_time_avg(ds["prediction"].values, time)
         lat       = ds["latitude"].values
@@ -191,7 +188,6 @@ class PaleoEmuPlotter:
         ...              save_name="north_atl_ts", fmt="pdf")
         """
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
-        _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
         pred      = ds["prediction"].values
         lat       = ds["latitude"].values
@@ -265,7 +261,6 @@ class PaleoEmuPlotter:
         ...                   save_dir="figures/uncertainty/")
         """
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
-        _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
         frame     = np.sqrt(_sel_time_avg(ds["variance"].values, time))
         lat       = ds["latitude"].values
@@ -326,7 +321,6 @@ class PaleoEmuPlotter:
         ...              title="Early SSP585 — zonal mean", fmt="pdf")
         """
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
-        _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
         frame     = _sel_time_avg(ds["prediction"].values, time)
         lat       = ds["latitude"].values
@@ -392,8 +386,6 @@ class PaleoEmuPlotter:
         ...             save_name="delta_ssp585_ssp126", fmt="pdf")
         """
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
-        _validate_var(scenario,     var, cfg_obj)
-        _validate_var(ref_scenario, var, cfg_obj)
         ds_s   = self._load(scenario,     var, filepath,     cfg_obj, cfg_path)
         ds_r   = self._load(ref_scenario, var, ref_filepath, cfg_obj, cfg_path)
         s_fr   = _sel_time_avg(ds_s["prediction"].values, time)
@@ -475,7 +467,6 @@ class PaleoEmuPlotter:
             )
 
         cfg_obj, cfg_path = self._resolve_cfg(cfg)
-        _validate_var(scenario, var, cfg_obj)
         ds        = self._load(scenario, var, filepath, cfg_obj, cfg_path)
         pred      = ds["prediction"].values
         lat       = ds["latitude"].values
@@ -598,16 +589,23 @@ class PaleoEmuPlotter:
         return xr.open_dataset(derived, engine="h5netcdf")
 
     def _derived_path(self, scenario, var, cfg_obj, cfg_path):
-        if cfg_path is None:
+        if cfg_path is None or cfg_obj is None:
             return None
+
         out_dir = cfg_path.parent / "outputs"
-        if var is not None:
-            matches = sorted(out_dir.glob(f"*{var}*_{scenario}_prediction.nc"))
-            if matches:
-                return matches[0]
-        if cfg_obj is None:
-            return None
-        return out_dir / f"{cfg_obj.model_run_name}_{scenario}_prediction.nc"
+        model_name = cfg_obj.model_run_name
+        if var is None:
+            return out_dir / f"{model_name}_{scenario}_prediction.nc"
+
+        expected = out_dir / f"{model_name}_{scenario}_{var}_prediction.nc"
+        if expected.exists():
+            return expected
+
+        matches = sorted(out_dir.glob(f"{model_name}_{scenario}_*{var}*_prediction.nc"))
+        if matches:
+            return matches[0]
+
+        return expected
 
     def _save_dir(self, save_dir, cfg_path=None):
         if save_dir:
@@ -661,27 +659,6 @@ def _load_cfg(cfg_path, caller_dir):
     if not p.is_absolute() and not p.exists():
         p = caller_dir / p
     return p, load_config(str(p))
-
-
-def _validate_var(scenario, var, cfg_obj):
-    """Raise if var is given but the scenario has no 'var' sweep dimension."""
-    if var is None or cfg_obj is None:
-        return
-    scenario_cfg = cfg_obj.forcing_data.get(scenario, {})
-    if "var" not in scenario_cfg:
-        sweep_dims = [k for k in scenario_cfg
-                      if k not in ("forcing_input", "forcing_input_pattern")]
-        raise ValueError(
-            f"'var' is not a sweep dimension of scenario '{scenario}'. "
-            + (f"Available sweep dimensions: {sweep_dims}"
-               if sweep_dims else "This scenario has no sweep dimensions.")
-        )
-    allowed = scenario_cfg["var"]
-    if isinstance(allowed, list) and var not in [str(v) for v in allowed]:
-        raise ValueError(
-            f"var='{var}' is not in the allowed values for scenario '{scenario}': "
-            f"{allowed}"
-        )
 
 
 def _sel_time_avg(arr, time):

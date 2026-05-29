@@ -9,7 +9,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 
-from paleo_emu.config import NumberedSweep, PatternForcingConfig, SingleForcingConfig, load_config
+from paleo_emu.config import NumberedSweep, load_config
 from paleo_emu.export import save_prediction
 from paleo_emu.load import load_forcing_data, load_training_data
 from paleo_emu.training import TrainingGenerator
@@ -44,7 +44,7 @@ def _matches_filter(sweep_vals: dict, sweep_overrides: dict) -> bool:
     return True
 
 
-def _expand_pattern_config(config: PatternForcingConfig):
+def _expand_pattern_config(config):
     """Yield (sweep_dict, forcing_file) pairs for a pattern scenario."""
     sweep_values = config.expanded_sweep_values()
     keys = list(sweep_values)
@@ -56,9 +56,9 @@ def _expand_pattern_config(config: PatternForcingConfig):
         yield values, forcing_file
 
 
-def _expand_scenario(scenario_cfg: SingleForcingConfig | PatternForcingConfig):
+def _expand_scenario(scenario_cfg):
     """Yield (sweep_dict, forcing_file) pairs for a validated scenario config."""
-    if isinstance(scenario_cfg, SingleForcingConfig):
+    if scenario_cfg.kind == "single":
         yield {}, scenario_cfg.forcing_input
         return
 
