@@ -28,4 +28,5 @@ regressor_config:
 forcing_data_path: "examples/forcing_data/"
 forcing_data:
   800ka:
+    kind: single
     forcing_input: "Paleo_forcings_800ka_xin.res"
