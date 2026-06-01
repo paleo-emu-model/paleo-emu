@@ -103,8 +103,14 @@ class PaleoEmuRunner:
     def train(self) -> Path:
         """Load training data, fit the model, and save the artifact."""
         X, Y, var_name, _, lat_array, lon_array, _, var_attrs = load_training_data(self.cfg)
+        out_dir = (
+            str(Path(self.cfg.output_dir))
+            if self.cfg.output_dir is not None
+            else str(self.cfg_path.parent / "pretrained")
+        )
         training      = TrainingGenerator(self.cfg, X, Y, lat_array, lon_array,
-                                          var_name=var_name, var_attrs=var_attrs)
+                                          var_name=var_name, var_attrs=var_attrs,
+                                          output_dir=out_dir)
         artifact_path = Path(training.run_training())
         print(f"[TRAIN] artifact saved → {artifact_path}")
         return artifact_path
