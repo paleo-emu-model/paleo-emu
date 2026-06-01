@@ -34,18 +34,26 @@ forcing_data:
 
   # Case 1 — single file per scenario
   SSP585:
+    kind: single
     forcing_input: "Forcings_SSP585_since2000.res"
   SSP126:
+    kind: single
     forcing_input: "Forcings_SSP126_since2000.res"
   SSP370:
+    kind: single
     forcing_input: "Forcings_SSP370_since2000.res"
 
   # Case 2 — ensemble members: expands to member001.res … member090.res
   past800ka_ens:
+    kind: pattern
     forcing_input_pattern: "Forcings_past800ka_sst_member{member}.res"
-    member: "1-90"
+    member:
+      start: 1
+      end: 90
+      width: 3
 
   # Case 3 — one file per variable
   past800ka_var:
+    kind: pattern
     forcing_input_pattern: "Forcings_past800ka_{var}_member1.res"
     var: ["sst", "precip", "co2"]
