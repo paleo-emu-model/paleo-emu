@@ -18,8 +18,10 @@ import os
 import warnings
 
 import joblib
+import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import make_scorer
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -28,6 +30,13 @@ from sklearn.exceptions import ConvergenceWarning
 from paleo_emu.config import PaleoEmuConfig, _GPRegressorConfig, _XGBRegressorConfig, make_kernel
 from paleo_emu.regressor import EncodedTargetRegressor, GPMultiOutputWithStd
 
+def _mse_ignore_nan(y_true, y_pred):
+    flat_true = np.asarray(y_true).ravel()
+    flat_pred = np.asarray(y_pred).ravel()
+    mask = np.isfinite(flat_true) & np.isfinite(flat_pred)
+    if mask.sum() == 0:
+        return 0.0
+    return float(np.mean((flat_true[mask] - flat_pred[mask]) ** 2))
 
 class TrainingGenerator:
     """Utility for training emulators with specified encoders and regressors.
@@ -172,13 +181,21 @@ class TrainingGenerator:
         param_grid = self._build_param_grid()
         cv_cfg = self.cfg.cv
 
+        # Use NaN-aware scorer if training targets contain NaN (e.g., ocean grid points)
+        if np.any(~np.isfinite(self.Y_train)):
+            scoring = make_scorer(_mse_ignore_nan, greater_is_better=False)  # 引用 module-level 函数
+        else:
+            scoring = cv_cfg.scoring
+
+
         grid = GridSearchCV(
             estimator=model,
             param_grid=param_grid,
             cv=cv_cfg.folds,
             n_jobs=cv_cfg.n_jobs,
-            scoring=cv_cfg.scoring,
+            scoring=scoring,
         )
+
 
         # Fit on RAW Y (high-dimensional field); encoding happens inside model
         # Suppress ConvergenceWarnings during parallel GP optimization

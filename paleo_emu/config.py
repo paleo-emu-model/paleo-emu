@@ -30,6 +30,7 @@ class _GPRegressorConfig(BaseModel):
     alpha: float = 1e-6
     whitekernel_noise_level: float = 1e-2
     whitekernel_noise_level_bounds: Tuple[float, float] = (1e-5, 1e1)
+    length_scale_bounds: Tuple[float, float] = (1e-5, 1e5)  # used for all kernels; ARD length scale is built in make_kernel()
 
     model_config = ConfigDict(extra="forbid")
 
@@ -108,12 +109,12 @@ def make_kernel(name: str, cfg: _GPRegressorConfig, n_features: int):
     length_scale = np.ones(n_features)
     
     if name == "RBF":
-        base_kernel = RBF(length_scale=length_scale, length_scale_bounds=(1e-5, 1e5))
+        base_kernel = RBF(length_scale=length_scale, length_scale_bounds=cfg.length_scale_bounds)
     elif name == "Matern_nu_15":
         base_kernel = Matern(length_scale=length_scale, nu=1.5,     
-                             length_scale_bounds=(1e-5, 1e5))
+                             length_scale_bounds=cfg.length_scale_bounds)
     elif name == "Matern_nu_25":
-        base_kernel = Matern(length_scale=length_scale, nu=2.5, length_scale_bounds=(1e-5, 1e5))
+        base_kernel = Matern(length_scale=length_scale, nu=2.5, length_scale_bounds=cfg.length_scale_bounds)
     else:
         raise ValueError(f"Unknown kernel name: {name}")
 
